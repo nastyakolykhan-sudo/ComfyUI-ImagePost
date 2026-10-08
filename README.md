@@ -182,7 +182,7 @@ Never edit `imgpost/` here. To pick up an engine change:
 ## Extending
 
 - **New grade options.** Port the branch from the runner into `stages.grade`; the job's `grade` section passes it through unchanged. To add a switch on the node, add an optional combo whose first choice is `job`, after the existing ones, as `relight` was. UI workflows store widget values by position.
-- **Automatic measuring.** Mask inputs take scene-sized masks, so a mask from another node can replace Job Masks' outputs. A matching node could write `align.points` into the job before Fit Warp. Edges a model suggests should still be checked against the measured colour edge, since a segmentation outline is rarely sub-pixel. Score any of this against hand-measured jobs with `tools/regress.py --job`.
+- **Measuring helpers.** `imgpost/autofit.py` holds the engine's measuring helpers. They snap a rough polyline to the colour edge below a pixel, refine a rough landmark by correlation with a trust verdict, trace a packshot's outline, and propose edge lines and the old silhouette from a rough placement. The engine's own `draft` command uses them, and an Auto Draft node could wrap them: a rough quad in, a draft job out. On a clean scene a draft is close to final; on a cluttered shelf it is a scaffold to finish by hand. Mask inputs already take scene-sized masks, so a mask from another node can replace Job Masks' outputs. Score any automation against hand-measured jobs with `tools/regress.py --job` before trusting it.
 
 ## Not covered yet
 

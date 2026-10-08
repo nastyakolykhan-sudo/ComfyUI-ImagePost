@@ -1,9 +1,10 @@
 {
   "skill": "~/Documents/Claude/image-post",
-  "imgpost_version": "0.2.0",
+  "imgpost_version": "0.3.0",
   "synced": "2026-10-08",
   "files": {
-    "__init__.py": "fbba432eb1654d6220972b2fd3f111ced1db2aa5d49acd8c5c22a98df541044e",
+    "__init__.py": "103c45eb6019d8bc22bed5cf472f87a5df60c65807773a878e2465cd0af26298",
+    "autofit.py": "d7ca827f10bf74a0e25e9777eaf24d6dec438890950e576172691da283860c43",
     "fill.py": "11d2e7463f462160a4d09b625cd34cbfa4b3dc05e050ce02537839e4243e3a47",
     "finish.py": "5b3e3ba99a1ae6192d9c794c34f8cd457a0f732083e1bf504da92c86f5f6fff9",
     "geometry.py": "fdd474baaa891ddfd08795ce735e46ea1cae0ed6e1853f9e7701dfff99a6dbb7",
@@ -16,5 +17,5 @@
     "raster.py": "f9dc02da8f3121a741ce1ae906e1f0cea5c65b41c1b963edf032da9742816fd4",
     "warp.py": "24617154dee051ae7431046820d27c494234fc1c50a778fcea1c813864b33439"
   },
-  "run_py": "618bf058203f1af6b78bb7e6b3cae929b926ba6a572bc2aaa4b05ded821f8694"
+  "run_py": "37949845267575b6fd12eaf7716aa26203a909535076f322690fe3a5768a57ab"
 }
