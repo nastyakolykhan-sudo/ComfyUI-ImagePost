@@ -41,14 +41,35 @@ def white_level_gain(S_lin, inner, deep, X, Y, pct=92, window=41):
     return np.exp(_basis(X, Y, fr) @ c)
 
 
-def luma_ratio_gain(S_lin, R_lin, mask, X, Y, sigma=6.0):
-    """Light falloff = smooth fit to blurred scene/reference luminance ratio (for products without light areas)."""
-    Ls, Lr = gaussian_filter(lum(S_lin), sigma), gaussian_filter(lum(R_lin), sigma)
-    sel = mask & (Ls > 1e-3) & (Lr > 1e-3)
+def luma_ratio_gain(S_lin, R_lin, mask, X, Y, sigma=6.0, match_hue=None, flat=0.08):
+    """Light falloff = smooth fit to blurred scene/reference luminance ratio (for products without light areas).
+    match_hue (deg): read the ratio only where both images show the same saturated ink, on flat areas (no edge in
+    either), unblurred, so a generated print laid out differently can't read as light (a printed box: its
+    background ink). The white level of such a box is set by its print, not by the light."""
+    if not match_hue:
+        Ls, Lr = gaussian_filter(lum(S_lin), sigma), gaussian_filter(lum(R_lin), sigma)
+        sel = mask & (Ls > 1e-3) & (Lr > 1e-3)
+        fr = _frame(sel, X, Y)
+        c = robust_quadratic(_basis(X[sel], Y[sel], fr), np.log(Ls[sel] / Lr[sel]))
+        g = np.exp(_basis(X, Y, fr) @ c)
+        return g / np.median(g[sel])
+    Ls, Lr = lum(S_lin), lum(R_lin)
+    hs, ss = _hue_sat(S_lin)
+    hr, sr = _hue_sat(R_lin)
+    dh = np.abs((hs - hr + 180) % 360 - 180)
+
+    def edge(L):
+        gy, gx = np.gradient(np.log(gaussian_filter(L, 0.8) + 1e-3))
+        return np.hypot(gx, gy)
+
+    sel = mask & (ss > 0.2) & (sr > 0.2) & (dh < match_hue) & (edge(Ls) < flat) & (edge(Lr) < flat)
+    if sel.sum() < 500:
+        raise ValueError(f"luma_ratio gain: only {int(sel.sum())} px show the same ink in both images; "
+                         "raise grade.match_hue or drop it")
     fr = _frame(sel, X, Y)
-    c = robust_quadratic(_basis(X[sel], Y[sel], fr), np.log(Ls[sel] / Lr[sel]))
+    c = robust_quadratic(_basis(X[sel], Y[sel], fr), np.log(Ls[sel] + 1e-3) - np.log(Lr[sel] + 1e-3))
     g = np.exp(_basis(X, Y, fr) @ c)
-    return g / np.median(g[sel])
+    return g / np.median(g[mask])
 
 
 def tone_curves(S_lin, R_lin, g, mask, nq=50):
@@ -63,6 +84,13 @@ def tone_curves(S_lin, R_lin, g, mask, nq=50):
         out.append({"a": round(float(sol.x[0]), 4), "gamma": round(float(sol.x[1]), 4), "b": round(float(sol.x[2]), 4),
                     "max_quantile_err": round(float(np.abs(sol.fun).max()), 4), "_p": sol.x})
     return out
+
+
+def clip_weight(R_lin, lo=0.88, hi=0.98):
+    """0..1 weight of near-clipped reference pixels: smoothstep on the sRGB max channel between lo and hi."""
+    from .images import lin_to_srgb
+    t = np.clip((lin_to_srgb(R_lin).max(-1) - lo) / max(hi - lo, 1e-6), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
 
 
 def apply_grade(R_lin, g, curves):

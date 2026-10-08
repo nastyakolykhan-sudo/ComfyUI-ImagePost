@@ -272,15 +272,18 @@ class ImagePostWarpReference:
     DESCRIPTION = (
         "Warps the reference into the work box (supersampled, in linear light) and its real outline into the "
         "product mask. align_overlay: reference at 50% over the scene, real outline in green, occluders in red. "
-        "coords: where each work-box pixel samples the reference (for grade.shading)."
+        "coords: where each work-box pixel samples the reference (for grade.shading). Warns when the measured "
+        "outline takes in the packshot's backdrop (a light rim in the composite)."
     )
 
     def warp(self, job, homography, scene, reference, reference_mask=None):
         su8, box, _ = _scene(job, scene)
         ru8, ra = _reference(job, reference, reference_mask)
-        W_lin, a_new, (U, V), overlay = _stages().warp(job, np.asarray(homography, float), _refmask(job, ru8, ra),
-                                                       su8, ru8, box)
-        return (_image_out(_to_layer(W_lin)), _mask_out(a_new), _pil_out(overlay), {"box": box, "u": U, "v": V})
+        refmask = _refmask(job, ru8, ra)
+        W_lin, a_new, (U, V), overlay = _stages().warp(job, np.asarray(homography, float), refmask, su8, ru8, box)
+        _fr, warn = _stages().fringe(refmask, ru8)
+        result = (_image_out(_to_layer(W_lin)), _mask_out(a_new), _pil_out(overlay), {"box": box, "u": U, "v": V})
+        return {"ui": {"text": [warn or "outline clear of the packshot's backdrop"]}, "result": result}
 
 
 class ImagePostGradeToScene:

@@ -30,7 +30,7 @@ There is one node per step. The math is the image-post engine's (`imgpost/`, see
 | **Load Job** | `job_json` (text) or `job_path` | `job` | reads and checks the job |
 | **Job Masks** | job, scene | `old_silhouette`, `occluder_mask` | rasterises the generated outline and the foreground objects |
 | **Fit Warp** | job | `homography`, `report` | homography or affine fit; shows the residual table |
-| **Warp Reference** | job, homography, scene, reference, `reference_mask`? | `warped`, `product_mask`, `align_overlay`, `coords` | supersampled warp in linear light |
+| **Warp Reference** | job, homography, scene, reference, `reference_mask`? | `warped`, `product_mask`, `align_overlay`, `coords` | supersampled warp in linear light; warns when the outline takes in the packshot's backdrop (a light rim) |
 | **Grade To Scene** | job, scene, warped, masks, `colour`, `shading`, `reference`?, `coords`?, `relight`? | `graded`, `grade_preview`, `report`, `relight_map` | light falloff, colour, cylinder shading, relight |
 | **Match Finish** | job, scene, graded, masks | `product`, `report` | highlight roll-off, blur and grain match |
 | **Fill Leftovers** | job, scene, masks | `background`, `fill_mask`, `report` | harmonic fill; stops with FILL STOPPED |
@@ -131,7 +131,7 @@ A failed run has `status.status_str: "error"`, with the node and `exception_mess
   - a `polyline` plus a `side`;
   - a `polygon`;
   - either of those with `soften` for an out-of-focus edge.
-- `grade`: `gain` (`white_level`, `luma_ratio`, `none`), `colour`, `shading`, `relight`.
+- `grade`: `gain` (`white_level`, `luma_ratio`, `none`), `colour`, `shading`, `relight`. On printed packaging whose generated print is laid out differently, `luma_ratio` with `match_hue` reads the light only where both images show the same ink; `protect_white` keeps the packshot's clipped whites from being dimmed.
 - `finish`: `blur` and `grain` (`auto` or a value), `edge_softness`, `rolloff`.
 - `fill`: `dilate`.
 - `psd`: true to also write the layered PSD.

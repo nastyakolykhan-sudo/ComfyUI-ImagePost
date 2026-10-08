@@ -585,6 +585,50 @@ def reference_mask(ref_u8, ref_alpha=None, tol=None):
     return m
 
 
+def outline_fringe(ref_u8, poly, near=1.0, step=1.0, reach=6.0):
+    """Where a measured outline runs into the packshot's plain backdrop. Along each outline sample's outward normal,
+    the backdrop distance (colour distance from the border colour) falls from the product's level to the backdrop's;
+    the 50% crossing is the product's edge. A sample nearer that edge than `near` px (or past it) takes in
+    anti-aliased backdrop, which composites as a light rim. Samples with no backdrop beyond them (another item
+    in the packshot) can't be judged and are skipped. -> list of stretches dict(from, to, px, worst), worst = the
+    sample's distance inside the edge (negative: past it), worst first."""
+    from scipy.ndimage import map_coordinates
+    c, d = background(ref_u8)
+    tol = _bg_tol(d)
+    dist = np.linalg.norm(ref_u8.astype(float) - c, axis=2)
+    P = np.asarray(poly, float)
+    S = resample(P, step, closed=True)
+    N = normals_for(S, "inside", closed=True, poly=S)       # outward
+    ts = np.arange(-reach, reach + 0.01, 0.25)
+    Q = S[:, None, :] + ts[None, :, None] * N[:, None, :]
+    v = map_coordinates(dist, [Q[..., 1].ravel(), Q[..., 0].ravel()], order=1, mode="nearest").reshape(Q.shape[:2])
+    inner = np.median(v[:, ts <= -3], 1)
+    outer = np.median(v[:, ts >= 3], 1)
+    judged = (outer <= 1.5 * tol) & (inner > 3 * tol)
+    inside = np.full(len(S), np.nan)
+    for i in np.nonzero(judged)[0]:
+        half = 0.5 * (inner[i] + outer[i])
+        above = np.nonzero(v[i] >= half)[0]          # from the backdrop end inward: the last product sample
+        if len(above) and above[-1] < len(ts) - 1:
+            k = above[-1]
+            t0, t1, v0, v1 = ts[k], ts[k + 1], v[i, k], v[i, k + 1]
+            inside[i] = t0 + (v0 - half) / (v0 - v1) * (t1 - t0)
+    bad = np.isfinite(inside) & (inside < near)
+    out, i, n = [], 0, len(S)
+    while i < n:
+        if not bad[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < n and bad[j + 1]:
+            j += 1
+        seg = inside[i:j + 1]
+        out.append({"from": [round(float(v), 1) for v in S[i]], "to": [round(float(v), 1) for v in S[j]],
+                    "px": round(float((j - i + 1) * step), 1), "worst": round(float(seg.min()), 2)})
+        i = j + 1
+    return sorted(out, key=lambda s: s["worst"])
+
+
 def _dp(P, tol):
     """Douglas-Peucker simplification of an open polyline."""
     if len(P) < 3:

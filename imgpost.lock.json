@@ -1,14 +1,14 @@
 {
   "skill": "~/Documents/Claude/image-post",
-  "imgpost_version": "0.4.0",
+  "imgpost_version": "0.4.1",
   "synced": "2026-10-08",
   "files": {
-    "__init__.py": "017c6a94d81c9e147f97f71a0ccce0dea60bc66d1c9c43d9a40ac257f2441464",
-    "autofit.py": "dbc21f29063e43bbda47d388e2839c768f07c455fceeac2f26b09f1f6c3acf0b",
+    "__init__.py": "ee3ae962e4d5a190e07fa47c1a400e8684b7591419e5ba403e5c4b220156814a",
+    "autofit.py": "2b5c6fe8fb2b92ef675ce0a7eea3a3bc443e8ee550262e02310e2c83fb498f73",
     "fill.py": "11d2e7463f462160a4d09b625cd34cbfa4b3dc05e050ce02537839e4243e3a47",
     "finish.py": "5b3e3ba99a1ae6192d9c794c34f8cd457a0f732083e1bf504da92c86f5f6fff9",
     "geometry.py": "fdd474baaa891ddfd08795ce735e46ea1cae0ed6e1853f9e7701dfff99a6dbb7",
-    "grade.py": "27f66b2894e2b243119a53dd7eafa6630f557d7c9a08c64d03dc59388122d5d6",
+    "grade.py": "8fffebd5109ef7f64136929b98aafce630caa9602c665df821e7260e0f14b58d",
     "images.py": "7d2e9e6f77b4f70c555bcf35412a11caa7705afbffff83e8636dbac0604d7e3d",
     "masks.py": "2f46b382f3b6f0654d603557ed3b2b39f130f7dd825ccacbe0bb725e464b91a9",
     "outline.py": "5ea13ec701bda1c5deaa02e465493ce6411ce643f7ecbc07bc756ad1fc396988",
@@ -17,5 +17,5 @@
     "raster.py": "f9dc02da8f3121a741ce1ae906e1f0cea5c65b41c1b963edf032da9742816fd4",
     "warp.py": "24617154dee051ae7431046820d27c494234fc1c50a778fcea1c813864b33439"
   },
-  "run_py": "2fff60e42f5453cc76e2b98442deda5093a74a7f73d07edf7ebe935e23103bd3"
+  "run_py": "a1c05116b6ebc12099ded2122a22f450edf2650dd16df235a8021bc9a4d3a359"
 }

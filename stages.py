@@ -9,6 +9,7 @@ run.py's sys.exit() conditions raise StageError with the same message.
 import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion, gaussian_filter
 
+from .imgpost import autofit as af
 from .imgpost import fill as fl
 from .imgpost import finish as fn
 from .imgpost import geometry as geo
@@ -75,6 +76,19 @@ def warp(job, H, refmask, scene_u8, ref_u8, roi):
     return W_lin, a_new, (U, V), overlay
 
 
+def fringe(refmask, ref_u8):
+    """-> (stretches, warning line or ""): where a measured outline takes in the packshot's plain backdrop, which
+    composites as a light rim (run.py prints the same line after the fit)."""
+    if not refmask.polygon or not af.on_plain_background(ref_u8):
+        return [], ""
+    fr = [f for f in af.outline_fringe(ref_u8, refmask.polygon, near=0.5) if f["px"] >= 5]
+    if not fr:
+        return fr, ""
+    return fr, (f"fringe     the outline takes in the packshot's backdrop on {len(fr)} stretch(es), worst "
+                f"{fr[0]['worst']:+.2f} px from {fr[0]['from']} to {fr[0]['to']}: a light rim. "
+                "measure.py fringe JOB, re-measure those sides (pitfall 45)")
+
+
 def scene_masks(job, roi):
     """-> (old silhouette bool, visibility 0..1) over the work box"""
     vis = mk.visibility(roi, job.get("occluders", []))
@@ -107,7 +121,7 @@ def grade(gs, scene_u8, ref_u8, roi, W_lin, a_new, old, vis, U=None):
         g = gr.white_level_gain(S_lin, inner, binary_erosion(inner, iterations=gs.get("deep_erode", 20)), X, Y,
                                 gs.get("white_percentile", 92), gs.get("window", 41))
     elif gain == "luma_ratio":
-        g = gr.luma_ratio_gain(S_lin, W_lin, both, X, Y, gs.get("sigma", 6.0))
+        g = gr.luma_ratio_gain(S_lin, W_lin, both, X, Y, gs.get("sigma", 6.0), gs.get("match_hue"), gs.get("flat", 0.08))
     else:
         g = np.ones(S_lin.shape[:2])
     rep = {"gain": gain, "gain_range": [round(float(g[both].min()), 3), round(float(g[both].max()), 3)]}
@@ -117,7 +131,8 @@ def grade(gs, scene_u8, ref_u8, roi, W_lin, a_new, old, vis, U=None):
             bx0, by0, bx1, by1 = [int(round(v)) for v in box]
             return np.median(im.srgb_to_lin(im.to_float(u8[by0:by1, bx0:bx1])).reshape(-1, 3), 0)
         if gs.get("white_box"):
-            shape = {"luma_ratio": lambda: gr.luma_ratio_gain(S_lin, W_lin, both, X, Y, gs.get("sigma", 6.0)),
+            shape = {"luma_ratio": lambda: gr.luma_ratio_gain(S_lin, W_lin, both, X, Y, gs.get("sigma", 6.0),
+                                                              gs.get("match_hue"), gs.get("flat", 0.08)),
                      "white_level": lambda: g / np.median(g[both]),
                      "none": lambda: np.ones(S_lin.shape[:2])}[gs.get("falloff", "luma_ratio")]()
             white = box_lin(scene_u8, gs["white_box"])[None, None, :] * shape[..., None] * gs.get("white_scale", 1.0)
@@ -138,6 +153,14 @@ def grade(gs, scene_u8, ref_u8, roi, W_lin, a_new, old, vis, U=None):
         curves = gr.tone_curves(S_lin, W_lin, g, both)
         graded = gr.apply_grade(W_lin, g, curves)
         rep.update({"colour": "scene", "curves_rgb": [{k: v for k, v in c.items() if k != "_p"} for c in curves]})
+        pw = gs.get("protect_white")
+        if pw:
+            # near-clipped packshot whites carry none of its light falloff: never dim them below the median light
+            lo, hi = pw if isinstance(pw, (list, tuple)) else (0.88, 0.98)
+            w = gr.clip_weight(W_lin, lo, hi)
+            gm = float(np.median(g[both]))
+            graded = graded * (1.0 + w * (np.maximum(g, gm) / g - 1.0))[..., None]
+            rep["protect_white"] = {"range": [lo, hi], "px": int((w[both] > 0.5).sum())}
 
     sh = gs.get("shading")
     if sh:
