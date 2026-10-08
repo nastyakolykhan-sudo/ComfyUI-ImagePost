@@ -298,6 +298,95 @@ def snap_silhouette(img, poly_ref, H, out=10.0, back=2.0, step=1.0, push=1.5, ma
     return _dp(np.vstack([poly, poly[:1]]), 0.5)[:-1], float(ok.mean())
 
 
+# ---- fitting to a mask ----
+
+def mask_from_background(img, box, bg=None, thresh=28.0, open_it=3, close_it=6):
+    """The product inside `box` (x0, y0, x1, y1) of a scene on a fairly plain background: pixels whose colour (sRGB
+    0..255, lightly smoothed) differs from the background colour `bg` by more than `thresh`; holes filled, largest
+    component. bg defaults to the median colour of the box's border. -> bool mask of the whole image."""
+    x0, y0, x1, y1 = (int(round(v)) for v in box)
+    a = np.stack([gaussian_filter(img[y0:y1, x0:x1, c] * 255.0, 2.0) for c in range(3)], -1)
+    if bg is None:
+        bg = np.median(np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]]), 0)
+    m = np.linalg.norm(a - np.asarray(bg, float), axis=2) > thresh
+    from scipy.ndimage import binary_closing, binary_opening
+    m = binary_fill_holes(binary_closing(binary_opening(m, iterations=open_it), iterations=close_it))
+    lab, n = label(m)
+    if n > 1:
+        sizes = np.bincount(lab.ravel())
+        sizes[0] = 0
+        m = lab == sizes.argmax()
+    out = np.zeros(img.shape[:2], bool)
+    out[y0:y1, x0:x1] = m
+    return out
+
+
+def _similarity(src, dst):
+    """Least-squares rotation + uniform scale + translation (Umeyama) mapping src -> dst, as a 3 x 3 matrix."""
+    ms, md = src.mean(0), dst.mean(0)
+    A, B = src - ms, dst - md
+    U, S, Vt = np.linalg.svd(B.T @ A)
+    d = np.sign(np.linalg.det(U @ Vt))
+    R = U @ np.diag([1.0, d]) @ Vt
+    sc = float(np.sum(S * np.array([1.0, d])) / max(float(np.sum(A * A)), 1e-12))
+    M = np.eye(3)
+    M[:2, :2], M[:2, 2] = sc * R, md - sc * R @ ms
+    return M
+
+
+def fit_to_mask(mask, poly_ref, H0, model="homography", step=3.0, skip=None, iters=40, refine=True):
+    """Fit the real outline onto a product mask's contour, starting from a rough homography H0.
+
+    Iterative closest point: every sampled outline point pairs with the nearest contour pixel (no search window,
+    so a side that starts far off still pulls), pairs beyond 2.5 x their median distance are dropped (leaks), and
+    the transform is refitted: rotation + scale first, then affine, then a homography. A mask has no clutter next
+    to its edge, so unlike fitting to image edges this can't latch onto a neighbour or print. A last pass snaps to
+    the mask's 0.5 crossing for sub-pixel accuracy. `skip(ref_pts) -> bool array` leaves parts of the outline out
+    (a cap the job keeps). -> dict(H, residual px per sample, used share, notes)"""
+    from scipy.spatial import cKDTree
+    P = np.asarray(poly_ref, float)
+    D = resample(P, step / max(local_scale(H0, P.mean(0)), 1e-6), closed=True)
+    use = np.ones(len(D), bool) if skip is None else ~np.asarray(skip(D), bool)
+    edge = mask & ~binary_erosion(mask)
+    by, bx = np.nonzero(edge)
+    tree = cKDTree(np.c_[bx, by].astype(float))
+    H, notes = H0 / H0[2, 2], []
+    stages = [("similarity", iters // 3), ("affine", iters // 3), (model, iters - 2 * (iters // 3))]
+    for kind, n_it in stages:
+        if kind == "homography" and model == "affine":
+            continue
+        for _ in range(n_it):
+            S = apply_H(H, D[use])
+            dist, idx = tree.query(S)
+            keep = dist <= max(2.5 * float(np.median(dist)), 2.0)
+            src, dst = D[use][keep], tree.data[idx[keep]]
+            if kind == "similarity":
+                Hn = _similarity(apply_H(H, src), dst) @ H
+            else:
+                Hn = fit_points(src, dst, model="affine" if kind == "affine" else "homography")
+            moved = float(np.max(np.linalg.norm(apply_H(Hn, D) - apply_H(H, D), axis=1)))
+            H = Hn / Hn[2, 2]
+            if moved < 0.05:
+                break
+        notes.append(f"{kind}: median distance to the contour {np.median(dist):.2f} px, {keep.mean():.0%} of points kept")
+    resid = np.full(len(D), np.nan)
+    if refine:
+        m = gaussian_filter(mask.astype(float), 1.0)
+        S = apply_H(H, D)
+        nrm = normals_for(S, "outside", closed=True, poly=S)
+        T, _ = snap_points(m, S, nrm, search=3.0, pick="nearest", sigma=0.5, spread=0.0, min_contrast=0.3)
+        ok = use & np.isfinite(T).all(1)
+        if ok.sum() >= 12:
+            r = np.sum((S - T) * nrm, 1)
+            good = ok & (np.abs(np.nan_to_num(r, nan=99.0)) <= max(2.5 * float(np.median(np.abs(r[ok]))), 0.75))
+            H = fit_points(D[good], T[good], model=model)
+            H = H / H[2, 2]
+            S = apply_H(H, D)
+            resid[ok] = np.sum((S[ok] - T[ok]) * nrm[ok], 1)
+            notes.append(f"sub-pixel pass: {int(good.sum())} points, median |residual| {np.median(np.abs(resid[good])):.2f} px")
+    return {"H": H, "ref": D, "residual": resid, "used": float(np.mean(np.isfinite(resid))), "notes": notes}
+
+
 # ---- landmarks ----
 
 def _ncc_surface(win, patch):
