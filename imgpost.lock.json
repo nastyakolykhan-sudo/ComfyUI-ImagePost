@@ -1,0 +1,20 @@
+{
+  "skill": "~/Documents/Claude/image-post",
+  "imgpost_version": "0.2.0",
+  "synced": "2026-10-08",
+  "files": {
+    "__init__.py": "fbba432eb1654d6220972b2fd3f111ced1db2aa5d49acd8c5c22a98df541044e",
+    "fill.py": "11d2e7463f462160a4d09b625cd34cbfa4b3dc05e050ce02537839e4243e3a47",
+    "finish.py": "5b3e3ba99a1ae6192d9c794c34f8cd457a0f732083e1bf504da92c86f5f6fff9",
+    "geometry.py": "fdd474baaa891ddfd08795ce735e46ea1cae0ed6e1853f9e7701dfff99a6dbb7",
+    "grade.py": "27f66b2894e2b243119a53dd7eafa6630f557d7c9a08c64d03dc59388122d5d6",
+    "images.py": "7d2e9e6f77b4f70c555bcf35412a11caa7705afbffff83e8636dbac0604d7e3d",
+    "masks.py": "2f46b382f3b6f0654d603557ed3b2b39f130f7dd825ccacbe0bb725e464b91a9",
+    "outline.py": "5ea13ec701bda1c5deaa02e465493ce6411ce643f7ecbc07bc756ad1fc396988",
+    "psd.py": "132fdcb5dd9ef88004cdb29c78a5bd67621f395c53b39e47fc8f5b1a0a13f868",
+    "qa.py": "7fc25ec208b9fc73a7c650ce7ed7230628749b8724081305dc27b96c2138bbf4",
+    "raster.py": "f9dc02da8f3121a741ce1ae906e1f0cea5c65b41c1b963edf032da9742816fd4",
+    "warp.py": "24617154dee051ae7431046820d27c494234fc1c50a778fcea1c813864b33439"
+  },
+  "run_py": "618bf058203f1af6b78bb7e6b3cae929b926ba6a572bc2aaa4b05ded821f8694"
+}

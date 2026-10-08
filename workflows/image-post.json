@@ -1,0 +1,1502 @@
+{
+ "id": "976b6ca8-62ac-5aa3-b068-9e7b98444575",
+ "revision": 0,
+ "last_node_id": 19,
+ "last_link_id": 58,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "LoadImage",
+   "pos": [
+    0,
+    0
+   ],
+   "size": [
+    400,
+    360
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      2,
+      6,
+      10,
+      18,
+      24,
+      29,
+      35,
+      53
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": null,
+     "slot_index": 1
+    }
+   ],
+   "title": "Scene (generated image)",
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "imagepost_demo_scene.png",
+    "image"
+   ]
+  },
+  {
+   "id": 2,
+   "type": "LoadImage",
+   "pos": [
+    0,
+    390
+   ],
+   "size": [
+    400,
+    360
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      7,
+      15,
+      37
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": [
+      8,
+      40
+     ],
+     "slot_index": 1
+    }
+   ],
+   "title": "Reference (real product)",
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "imagepost_demo_packshot.png",
+    "image"
+   ]
+  },
+  {
+   "id": 3,
+   "type": "ImagePostLoadJob",
+   "pos": [
+    0,
+    780
+   ],
+   "size": [
+    420,
+    560
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "links": [
+      1,
+      3,
+      4,
+      9,
+      17,
+      23,
+      28,
+      34,
+      52
+     ],
+     "slot_index": 0
+    }
+   ],
+   "title": "Load Job",
+   "properties": {
+    "Node name for S&R": "ImagePostLoadJob"
+   },
+   "widgets_values": [
+    "{\n  \"about\": \"Demo (tools/make_demo.py): a made-up product card whose print came out garbled in a generated still, with a mug in front of its lower right corner and the mug's shadow across it. The landmarks and outlines come from the geometry that placed the card; on a real image they are measured.\",\n  \"scene\": \"imagepost_demo_scene.png\",\n  \"reference\": \"imagepost_demo_packshot.png\",\n  \"output\": \"imagepost_demo_scene_refined.png\",\n  \"scene_size\": [\n    1024,\n    768\n  ],\n  \"reference_size\": [\n    600,\n    800\n  ],\n  \"roi\": [\n    330,\n    120,\n    660,\n    620\n  ],\n  \"reference_outline\": {\n    \"type\": \"rounded_rect\",\n    \"x0\": 40,\n    \"y0\": 40,\n    \"x1\": 560,\n    \"y1\": 760,\n    \"r_top\": 28,\n    \"r_bottom\": 28\n  },\n  \"align\": {\n    \"model\": \"homography\",\n    \"points\": [\n      {\n        \"label\": \"header band, bottom left corner\",\n        \"ref\": [\n          40,\n          230\n        ],\n        \"scene\": [\n          371.47,\n          277.72\n        ],\n        \"w\": 2\n      },\n      {\n        \"label\": \"header band, bottom right corner\",\n        \"ref\": [\n          560,\n          230\n        ],\n        \"scene\": [\n          611.47,\n          286.32\n        ],\n        \"w\": 2\n      },\n      {\n        \"label\": \"bottom band, top left corner\",\n        \"ref\": [\n          40,\n          690\n        ],\n        \"scene\": [\n          370.19,\n          538.36\n        ],\n        \"w\": 2\n      },\n      {\n        \"label\": \"emblem centre\",\n        \"ref\": [\n          300,\n          430\n        ],\n        \"scene\": [\n          495.18,\n          391.49\n        ],\n        \"w\": 2\n      }\n    ],\n    \"y_only\": [],\n    \"lines\": [\n      {\n        \"label\": \"left card edge\",\n        \"ref\": [\n          [\n            40,\n            100\n          ],\n          [\n            40,\n            700\n          ]\n        ],\n        \"n\": 12,\n        \"w\": 2,\n        \"scene\": [\n          [\n            371.83,\n            204.02\n          ],\n          [\n            371.6,\n            252.61\n          ],\n          [\n            371.36,\n            301.2\n          ],\n          [\n            371.12,\n            349.78\n          ],\n          [\n            370.88,\n            398.35\n          ],\n          [\n            370.64,\n            446.91\n          ],\n          [\n            370.4,\n            495.47\n          ],\n          [\n            370.17,\n            544.02\n          ]\n        ]\n      },\n      {\n        \"label\": \"right card edge, above the mug\",\n        \"ref\": [\n          [\n            560,\n            100\n          ],\n          [\n            560,\n            475.0\n          ]\n        ],\n        \"n\": 8,\n        \"w\": 2,\n        \"scene\": [\n          [\n            611.83,\n            217.68\n          ],\n          [\n            611.76,\n            230.88\n          ],\n          [\n            611.69,\n            244.08\n          ],\n          [\n            611.62,\n            257.28\n          ],\n          [\n            611.56,\n            270.48\n          ],\n          [\n            611.49,\n            283.68\n          ],\n          [\n            611.42,\n            296.88\n          ],\n          [\n            611.35,\n            310.08\n          ],\n          [\n            611.28,\n            323.27\n          ],\n          [\n            611.21,\n            336.47\n          ],\n          [\n            611.14,\n            349.66\n          ],\n          [\n            611.07,\n            362.86\n          ],\n          [\n            611.0,\n            376.05\n          ],\n          [\n            610.93,\n            389.25\n          ],\n          [\n            610.86,\n            402.44\n          ],\n          [\n            610.79,\n            415.64\n          ]\n        ]\n      }\n    ]\n  },\n  \"old_silhouette\": [\n    [\n      372.03,\n      163.2\n    ],\n    [\n      612.03,\n      179.66\n    ],\n    [\n      610.0,\n      566.0\n    ],\n    [\n      370.0,\n      578.0\n    ]\n  ],\n  \"occluders\": [\n    {\n      \"label\": \"mug in front of the lower right corner\",\n      \"polygon\": [\n        [\n          592.0,\n          438.0\n        ],\n        [\n          592.0,\n          652.0\n        ],\n        [\n          592.53,\n          653.77\n        ],\n        [\n          594.11,\n          655.51\n        ],\n        [\n          596.72,\n          657.18\n        ],\n        [\n          600.3,\n          658.75\n        ],\n        [\n          604.78,\n          660.2\n        ],\n        [\n          610.09,\n          661.5\n        ],\n        [\n          616.13,\n          662.62\n        ],\n        [\n          622.78,\n          663.54\n        ],\n        [\n          629.91,\n          664.25\n        ],\n        [\n          637.4,\n          664.73\n        ],\n        [\n          645.11,\n          664.97\n        ],\n        [\n          652.89,\n          664.97\n        ],\n        [\n          660.6,\n          664.73\n        ],\n        [\n          668.09,\n          664.25\n        ],\n        [\n          675.22,\n          663.54\n        ],\n        [\n          681.87,\n          662.62\n        ],\n        [\n          687.91,\n          661.5\n        ],\n        [\n          693.22,\n          660.2\n        ],\n        [\n          697.7,\n          658.75\n        ],\n        [\n          701.28,\n          657.18\n        ],\n        [\n          703.89,\n          655.51\n        ],\n        [\n          705.47,\n          653.77\n        ],\n        [\n          706.0,\n          652.0\n        ],\n        [\n          706.0,\n          438.0\n        ],\n        [\n          705.47,\n          436.23\n        ],\n        [\n          703.89,\n          434.49\n        ],\n        [\n          701.28,\n          432.82\n        ],\n        [\n          697.7,\n          431.25\n        ],\n        [\n          693.22,\n          429.8\n        ],\n        [\n          687.91,\n          428.5\n        ],\n        [\n          681.87,\n          427.38\n        ],\n        [\n          675.22,\n          426.46\n        ],\n        [\n          668.09,\n          425.75\n        ],\n        [\n          660.6,\n          425.27\n        ],\n        [\n          652.89,\n          425.03\n        ],\n        [\n          645.11,\n          425.03\n        ],\n        [\n          637.4,\n          425.27\n        ],\n        [\n          629.91,\n          425.75\n        ],\n        [\n          622.78,\n          426.46\n        ],\n        [\n          616.13,\n          427.38\n        ],\n        [\n          610.09,\n          428.5\n        ],\n        [\n          604.78,\n          429.8\n        ],\n        [\n          600.3,\n          431.25\n        ],\n        [\n          596.72,\n          432.82\n        ],\n        [\n          594.11,\n          434.49\n        ],\n        [\n          592.53,\n          436.23\n        ],\n        [\n          592.0,\n          438.0\n        ]\n      ]\n    }\n  ],\n  \"grade\": {\n    \"gain\": \"white_level\",\n    \"white_percentile\": 92,\n    \"window\": 41,\n    \"erode\": 4,\n    \"deep_erode\": 20,\n    \"colour\": \"reference\",\n    \"ref_white_box\": [\n      60,\n      290,\n      160,\n      330\n    ],\n    \"relight\": {\n      \"sigma\": 14\n    }\n  },\n  \"finish\": {\n    \"blur\": \"auto\",\n    \"blur_probe\": null,\n    \"grain\": \"auto\",\n    \"edge_softness\": 0.6,\n    \"rolloff\": 0.85\n  },\n  \"fill\": {\n    \"dilate\": 2\n  }\n}\n",
+    ""
+   ]
+  },
+  {
+   "id": 4,
+   "type": "ImagePostJobMasks",
+   "pos": [
+    470,
+    180
+   ],
+   "size": [
+    380,
+    220
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "link": 1
+    },
+    {
+     "name": "scene",
+     "type": "IMAGE",
+     "link": 2
+    }
+   ],
+   "outputs": [
+    {
+     "name": "old_silhouette",
+     "type": "MASK",
+     "links": [
+      13,
+      21,
+      26
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "occluder_mask",
+     "type": "MASK",
+     "links": [
+      14,
+      22,
+      27,
+      33
+     ],
+     "slot_index": 1
+    }
+   ],
+   "title": "Job Masks",
+   "properties": {
+    "Node name for S&R": "ImagePostJobMasks"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 5,
+   "type": "ImagePostFitWarp",
+   "pos": [
+    470,
+    0
+   ],
+   "size": [
+    380,
+    140
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "link": 3
+    }
+   ],
+   "outputs": [
+    {
+     "name": "homography",
+     "type": "IMAGEPOST_HOMOGRAPHY",
+     "links": [
+      5
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": [
+      41
+     ],
+     "slot_index": 1
+    }
+   ],
+   "title": "Fit Warp",
+   "properties": {
+    "Node name for S&R": "ImagePostFitWarp"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 6,
+   "type": "ImagePostWarpReference",
+   "pos": [
+    470,
+    400
+   ],
+   "size": [
+    380,
+    220
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "link": 4
+    },
+    {
+     "name": "homography",
+     "type": "IMAGEPOST_HOMOGRAPHY",
+     "link": 5
+    },
+    {
+     "name": "scene",
+     "type": "IMAGE",
+     "link": 6
+    },
+    {
+     "name": "reference",
+     "type": "IMAGE",
+     "link": 7
+    },
+    {
+     "name": "reference_mask",
+     "type": "MASK",
+     "link": 8
+    }
+   ],
+   "outputs": [
+    {
+     "name": "warped",
+     "type": "IMAGE",
+     "links": [
+      11
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "product_mask",
+     "type": "MASK",
+     "links": [
+      12,
+      20,
+      25,
+      32
+     ],
+     "slot_index": 1
+    },
+    {
+     "name": "align_overlay",
+     "type": "IMAGE",
+     "links": [
+      49
+     ],
+     "slot_index": 2
+    },
+    {
+     "name": "coords",
+     "type": "IMAGEPOST_COORDS",
+     "links": [
+      16
+     ],
+     "slot_index": 3
+    }
+   ],
+   "title": "Warp Reference",
+   "properties": {
+    "Node name for S&R": "ImagePostWarpReference"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 7,
+   "type": "ImagePostGradeToScene",
+   "pos": [
+    900,
+    0
+   ],
+   "size": [
+    380,
+    220
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "link": 9
+    },
+    {
+     "name": "scene",
+     "type": "IMAGE",
+     "link": 10
+    },
+    {
+     "name": "warped",
+     "type": "IMAGE",
+     "link": 11
+    },
+    {
+     "name": "product_mask",
+     "type": "MASK",
+     "link": 12
+    },
+    {
+     "name": "old_silhouette",
+     "type": "MASK",
+     "link": 13
+    },
+    {
+     "name": "occluder_mask",
+     "type": "MASK",
+     "link": 14
+    },
+    {
+     "name": "reference",
+     "type": "IMAGE",
+     "link": 15
+    },
+    {
+     "name": "coords",
+     "type": "IMAGEPOST_COORDS",
+     "link": 16
+    }
+   ],
+   "outputs": [
+    {
+     "name": "graded",
+     "type": "IMAGE",
+     "links": [
+      19
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "grade_preview",
+     "type": "IMAGE",
+     "links": [
+      50
+     ],
+     "slot_index": 1
+    },
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": [
+      42
+     ],
+     "slot_index": 2
+    },
+    {
+     "name": "relight_map",
+     "type": "IMAGE",
+     "links": [
+      51
+     ],
+     "slot_index": 3
+    }
+   ],
+   "title": "Grade To Scene",
+   "properties": {
+    "Node name for S&R": "ImagePostGradeToScene"
+   },
+   "widgets_values": [
+    "job",
+    "job",
+    "job"
+   ]
+  },
+  {
+   "id": 8,
+   "type": "ImagePostMatchFinish",
+   "pos": [
+    1330,
+    260
+   ],
+   "size": [
+    380,
+    220
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "link": 17
+    },
+    {
+     "name": "scene",
+     "type": "IMAGE",
+     "link": 18
+    },
+    {
+     "name": "graded",
+     "type": "IMAGE",
+     "link": 19
+    },
+    {
+     "name": "product_mask",
+     "type": "MASK",
+     "link": 20
+    },
+    {
+     "name": "old_silhouette",
+     "type": "MASK",
+     "link": 21
+    },
+    {
+     "name": "occluder_mask",
+     "type": "MASK",
+     "link": 22
+    }
+   ],
+   "outputs": [
+    {
+     "name": "product",
+     "type": "IMAGE",
+     "links": [
+      31,
+      57
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": [
+      43
+     ],
+     "slot_index": 1
+    }
+   ],
+   "title": "Match Finish",
+   "properties": {
+    "Node name for S&R": "ImagePostMatchFinish"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 9,
+   "type": "ImagePostFillLeftovers",
+   "pos": [
+    1330,
+    0
+   ],
+   "size": [
+    380,
+    220
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "link": 23
+    },
+    {
+     "name": "scene",
+     "type": "IMAGE",
+     "link": 24
+    },
+    {
+     "name": "product_mask",
+     "type": "MASK",
+     "link": 25
+    },
+    {
+     "name": "old_silhouette",
+     "type": "MASK",
+     "link": 26
+    },
+    {
+     "name": "occluder_mask",
+     "type": "MASK",
+     "link": 27
+    }
+   ],
+   "outputs": [
+    {
+     "name": "background",
+     "type": "IMAGE",
+     "links": [
+      30,
+      55
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "fill_mask",
+     "type": "MASK",
+     "links": [
+      39,
+      56
+     ],
+     "slot_index": 1
+    },
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": [
+      44
+     ],
+     "slot_index": 2
+    }
+   ],
+   "title": "Fill Leftovers",
+   "properties": {
+    "Node name for S&R": "ImagePostFillLeftovers"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 10,
+   "type": "ImagePostCompositeBehind",
+   "pos": [
+    1330,
+    500
+   ],
+   "size": [
+    380,
+    220
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "link": 28
+    },
+    {
+     "name": "scene",
+     "type": "IMAGE",
+     "link": 29
+    },
+    {
+     "name": "background",
+     "type": "IMAGE",
+     "link": 30
+    },
+    {
+     "name": "product",
+     "type": "IMAGE",
+     "link": 31
+    },
+    {
+     "name": "product_mask",
+     "type": "MASK",
+     "link": 32
+    },
+    {
+     "name": "occluder_mask",
+     "type": "MASK",
+     "link": 33
+    }
+   ],
+   "outputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "links": [
+      36,
+      45,
+      54
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "matte",
+     "type": "MASK",
+     "links": [
+      38,
+      58
+     ],
+     "slot_index": 1
+    }
+   ],
+   "title": "Composite Behind",
+   "properties": {
+    "Node name for S&R": "ImagePostCompositeBehind"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 11,
+   "type": "ImagePostQASheet",
+   "pos": [
+    1760,
+    0
+   ],
+   "size": [
+    420,
+    520
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "link": 34
+    },
+    {
+     "name": "before",
+     "type": "IMAGE",
+     "link": 35
+    },
+    {
+     "name": "after",
+     "type": "IMAGE",
+     "link": 36
+    },
+    {
+     "name": "reference",
+     "type": "IMAGE",
+     "link": 37
+    },
+    {
+     "name": "matte",
+     "type": "MASK",
+     "link": 38
+    },
+    {
+     "name": "fill_mask",
+     "type": "MASK",
+     "link": 39
+    },
+    {
+     "name": "reference_mask",
+     "type": "MASK",
+     "link": 40
+    },
+    {
+     "name": "align_report",
+     "type": "STRING",
+     "link": 41
+    },
+    {
+     "name": "grade_report",
+     "type": "STRING",
+     "link": 42
+    },
+    {
+     "name": "finish_report",
+     "type": "STRING",
+     "link": 43
+    },
+    {
+     "name": "fill_report",
+     "type": "STRING",
+     "link": 44
+    }
+   ],
+   "outputs": [
+    {
+     "name": "compare",
+     "type": "IMAGE",
+     "links": [
+      46
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "edges",
+     "type": "IMAGE",
+     "links": [
+      47
+     ],
+     "slot_index": 1
+    },
+    {
+     "name": "before_after",
+     "type": "IMAGE",
+     "links": [
+      48
+     ],
+     "slot_index": 2
+    },
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": null,
+     "slot_index": 3
+    }
+   ],
+   "title": "QA Sheet",
+   "properties": {
+    "Node name for S&R": "ImagePostQASheet"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 12,
+   "type": "SaveImage",
+   "pos": [
+    1330,
+    760
+   ],
+   "size": [
+    400,
+    330
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 45
+    }
+   ],
+   "outputs": [],
+   "title": "Save refined image",
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "image-post/imagepost_demo_scene_refined"
+   ]
+  },
+  {
+   "id": 13,
+   "type": "SaveImage",
+   "pos": [
+    2220,
+    0
+   ],
+   "size": [
+    400,
+    330
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 46
+    }
+   ],
+   "outputs": [],
+   "title": "Save QA compare",
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "image-post/qa/compare"
+   ]
+  },
+  {
+   "id": 14,
+   "type": "SaveImage",
+   "pos": [
+    2220,
+    360
+   ],
+   "size": [
+    400,
+    330
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 47
+    }
+   ],
+   "outputs": [],
+   "title": "Save QA edges",
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "image-post/qa/edges"
+   ]
+  },
+  {
+   "id": 15,
+   "type": "SaveImage",
+   "pos": [
+    2220,
+    720
+   ],
+   "size": [
+    400,
+    330
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 48
+    }
+   ],
+   "outputs": [],
+   "title": "Save QA before_after",
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "image-post/qa/before_after"
+   ]
+  },
+  {
+   "id": 16,
+   "type": "SaveImage",
+   "pos": [
+    470,
+    700
+   ],
+   "size": [
+    400,
+    330
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 49
+    }
+   ],
+   "outputs": [],
+   "title": "Save QA align_overlay",
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "image-post/qa/align_overlay"
+   ]
+  },
+  {
+   "id": 17,
+   "type": "SaveImage",
+   "pos": [
+    900,
+    420
+   ],
+   "size": [
+    400,
+    330
+   ],
+   "flags": {},
+   "order": 16,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 50
+    }
+   ],
+   "outputs": [],
+   "title": "Save QA grade_preview",
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "image-post/qa/grade_preview"
+   ]
+  },
+  {
+   "id": 18,
+   "type": "SaveImage",
+   "pos": [
+    900,
+    780
+   ],
+   "size": [
+    400,
+    330
+   ],
+   "flags": {},
+   "order": 17,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 51
+    }
+   ],
+   "outputs": [],
+   "title": "Save QA relight_map",
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "image-post/qa/relight_map"
+   ]
+  },
+  {
+   "id": 19,
+   "type": "ImagePostSavePSD",
+   "pos": [
+    1760,
+    580
+   ],
+   "size": [
+    420,
+    300
+   ],
+   "flags": {},
+   "order": 18,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "job",
+     "type": "IMAGEPOST_JOB",
+     "link": 52
+    },
+    {
+     "name": "scene",
+     "type": "IMAGE",
+     "link": 53
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 54
+    },
+    {
+     "name": "background",
+     "type": "IMAGE",
+     "link": 55
+    },
+    {
+     "name": "fill_mask",
+     "type": "MASK",
+     "link": 56
+    },
+    {
+     "name": "product",
+     "type": "IMAGE",
+     "link": 57
+    },
+    {
+     "name": "matte",
+     "type": "MASK",
+     "link": 58
+    }
+   ],
+   "outputs": [],
+   "title": "Save PSD",
+   "properties": {
+    "Node name for S&R": "ImagePostSavePSD"
+   },
+   "widgets_values": [
+    "image-post/imagepost_demo_scene_refined"
+   ]
+  }
+ ],
+ "links": [
+  [
+   1,
+   3,
+   0,
+   4,
+   0,
+   "IMAGEPOST_JOB"
+  ],
+  [
+   2,
+   1,
+   0,
+   4,
+   1,
+   "IMAGE"
+  ],
+  [
+   3,
+   3,
+   0,
+   5,
+   0,
+   "IMAGEPOST_JOB"
+  ],
+  [
+   4,
+   3,
+   0,
+   6,
+   0,
+   "IMAGEPOST_JOB"
+  ],
+  [
+   5,
+   5,
+   0,
+   6,
+   1,
+   "IMAGEPOST_HOMOGRAPHY"
+  ],
+  [
+   6,
+   1,
+   0,
+   6,
+   2,
+   "IMAGE"
+  ],
+  [
+   7,
+   2,
+   0,
+   6,
+   3,
+   "IMAGE"
+  ],
+  [
+   8,
+   2,
+   1,
+   6,
+   4,
+   "MASK"
+  ],
+  [
+   9,
+   3,
+   0,
+   7,
+   0,
+   "IMAGEPOST_JOB"
+  ],
+  [
+   10,
+   1,
+   0,
+   7,
+   1,
+   "IMAGE"
+  ],
+  [
+   11,
+   6,
+   0,
+   7,
+   2,
+   "IMAGE"
+  ],
+  [
+   12,
+   6,
+   1,
+   7,
+   3,
+   "MASK"
+  ],
+  [
+   13,
+   4,
+   0,
+   7,
+   4,
+   "MASK"
+  ],
+  [
+   14,
+   4,
+   1,
+   7,
+   5,
+   "MASK"
+  ],
+  [
+   15,
+   2,
+   0,
+   7,
+   6,
+   "IMAGE"
+  ],
+  [
+   16,
+   6,
+   3,
+   7,
+   7,
+   "IMAGEPOST_COORDS"
+  ],
+  [
+   17,
+   3,
+   0,
+   8,
+   0,
+   "IMAGEPOST_JOB"
+  ],
+  [
+   18,
+   1,
+   0,
+   8,
+   1,
+   "IMAGE"
+  ],
+  [
+   19,
+   7,
+   0,
+   8,
+   2,
+   "IMAGE"
+  ],
+  [
+   20,
+   6,
+   1,
+   8,
+   3,
+   "MASK"
+  ],
+  [
+   21,
+   4,
+   0,
+   8,
+   4,
+   "MASK"
+  ],
+  [
+   22,
+   4,
+   1,
+   8,
+   5,
+   "MASK"
+  ],
+  [
+   23,
+   3,
+   0,
+   9,
+   0,
+   "IMAGEPOST_JOB"
+  ],
+  [
+   24,
+   1,
+   0,
+   9,
+   1,
+   "IMAGE"
+  ],
+  [
+   25,
+   6,
+   1,
+   9,
+   2,
+   "MASK"
+  ],
+  [
+   26,
+   4,
+   0,
+   9,
+   3,
+   "MASK"
+  ],
+  [
+   27,
+   4,
+   1,
+   9,
+   4,
+   "MASK"
+  ],
+  [
+   28,
+   3,
+   0,
+   10,
+   0,
+   "IMAGEPOST_JOB"
+  ],
+  [
+   29,
+   1,
+   0,
+   10,
+   1,
+   "IMAGE"
+  ],
+  [
+   30,
+   9,
+   0,
+   10,
+   2,
+   "IMAGE"
+  ],
+  [
+   31,
+   8,
+   0,
+   10,
+   3,
+   "IMAGE"
+  ],
+  [
+   32,
+   6,
+   1,
+   10,
+   4,
+   "MASK"
+  ],
+  [
+   33,
+   4,
+   1,
+   10,
+   5,
+   "MASK"
+  ],
+  [
+   34,
+   3,
+   0,
+   11,
+   0,
+   "IMAGEPOST_JOB"
+  ],
+  [
+   35,
+   1,
+   0,
+   11,
+   1,
+   "IMAGE"
+  ],
+  [
+   36,
+   10,
+   0,
+   11,
+   2,
+   "IMAGE"
+  ],
+  [
+   37,
+   2,
+   0,
+   11,
+   3,
+   "IMAGE"
+  ],
+  [
+   38,
+   10,
+   1,
+   11,
+   4,
+   "MASK"
+  ],
+  [
+   39,
+   9,
+   1,
+   11,
+   5,
+   "MASK"
+  ],
+  [
+   40,
+   2,
+   1,
+   11,
+   6,
+   "MASK"
+  ],
+  [
+   41,
+   5,
+   1,
+   11,
+   7,
+   "STRING"
+  ],
+  [
+   42,
+   7,
+   2,
+   11,
+   8,
+   "STRING"
+  ],
+  [
+   43,
+   8,
+   1,
+   11,
+   9,
+   "STRING"
+  ],
+  [
+   44,
+   9,
+   2,
+   11,
+   10,
+   "STRING"
+  ],
+  [
+   45,
+   10,
+   0,
+   12,
+   0,
+   "IMAGE"
+  ],
+  [
+   46,
+   11,
+   0,
+   13,
+   0,
+   "IMAGE"
+  ],
+  [
+   47,
+   11,
+   1,
+   14,
+   0,
+   "IMAGE"
+  ],
+  [
+   48,
+   11,
+   2,
+   15,
+   0,
+   "IMAGE"
+  ],
+  [
+   49,
+   6,
+   2,
+   16,
+   0,
+   "IMAGE"
+  ],
+  [
+   50,
+   7,
+   1,
+   17,
+   0,
+   "IMAGE"
+  ],
+  [
+   51,
+   7,
+   3,
+   18,
+   0,
+   "IMAGE"
+  ],
+  [
+   52,
+   3,
+   0,
+   19,
+   0,
+   "IMAGEPOST_JOB"
+  ],
+  [
+   53,
+   1,
+   0,
+   19,
+   1,
+   "IMAGE"
+  ],
+  [
+   54,
+   10,
+   0,
+   19,
+   2,
+   "IMAGE"
+  ],
+  [
+   55,
+   9,
+   0,
+   19,
+   3,
+   "IMAGE"
+  ],
+  [
+   56,
+   9,
+   1,
+   19,
+   4,
+   "MASK"
+  ],
+  [
+   57,
+   8,
+   0,
+   19,
+   5,
+   "IMAGE"
+  ],
+  [
+   58,
+   10,
+   1,
+   19,
+   6,
+   "MASK"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.55,
+   "offset": [
+    40,
+    40
+   ]
+  }
+ },
+ "version": 0.4
+}

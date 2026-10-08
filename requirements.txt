@@ -1,0 +1,4 @@
+# Already provided by ComfyUI (torch comes with it too). Listed so the pack also documents its needs.
+numpy
+scipy        # imgpost: homography fit, warp sampling, masks, harmonic fill
+Pillow>=10.1 # imgpost/qa.py: ImageFont.load_default(size=...)

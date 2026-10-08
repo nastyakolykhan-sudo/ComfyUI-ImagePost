@@ -1,0 +1,401 @@
+{
+  "1": {
+    "inputs": {
+      "image": "imagepost_demo_scene.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Scene (generated image)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "image": "imagepost_demo_packshot.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Reference (real product)"
+    }
+  },
+  "3": {
+    "inputs": {
+      "job_json": "{\n  \"about\": \"Demo (tools/make_demo.py): a made-up product card whose print came out garbled in a generated still, with a mug in front of its lower right corner and the mug's shadow across it. The landmarks and outlines come from the geometry that placed the card; on a real image they are measured.\",\n  \"scene\": \"imagepost_demo_scene.png\",\n  \"reference\": \"imagepost_demo_packshot.png\",\n  \"output\": \"imagepost_demo_scene_refined.png\",\n  \"scene_size\": [\n    1024,\n    768\n  ],\n  \"reference_size\": [\n    600,\n    800\n  ],\n  \"roi\": [\n    330,\n    120,\n    660,\n    620\n  ],\n  \"reference_outline\": {\n    \"type\": \"rounded_rect\",\n    \"x0\": 40,\n    \"y0\": 40,\n    \"x1\": 560,\n    \"y1\": 760,\n    \"r_top\": 28,\n    \"r_bottom\": 28\n  },\n  \"align\": {\n    \"model\": \"homography\",\n    \"points\": [\n      {\n        \"label\": \"header band, bottom left corner\",\n        \"ref\": [\n          40,\n          230\n        ],\n        \"scene\": [\n          371.47,\n          277.72\n        ],\n        \"w\": 2\n      },\n      {\n        \"label\": \"header band, bottom right corner\",\n        \"ref\": [\n          560,\n          230\n        ],\n        \"scene\": [\n          611.47,\n          286.32\n        ],\n        \"w\": 2\n      },\n      {\n        \"label\": \"bottom band, top left corner\",\n        \"ref\": [\n          40,\n          690\n        ],\n        \"scene\": [\n          370.19,\n          538.36\n        ],\n        \"w\": 2\n      },\n      {\n        \"label\": \"emblem centre\",\n        \"ref\": [\n          300,\n          430\n        ],\n        \"scene\": [\n          495.18,\n          391.49\n        ],\n        \"w\": 2\n      }\n    ],\n    \"y_only\": [],\n    \"lines\": [\n      {\n        \"label\": \"left card edge\",\n        \"ref\": [\n          [\n            40,\n            100\n          ],\n          [\n            40,\n            700\n          ]\n        ],\n        \"n\": 12,\n        \"w\": 2,\n        \"scene\": [\n          [\n            371.83,\n            204.02\n          ],\n          [\n            371.6,\n            252.61\n          ],\n          [\n            371.36,\n            301.2\n          ],\n          [\n            371.12,\n            349.78\n          ],\n          [\n            370.88,\n            398.35\n          ],\n          [\n            370.64,\n            446.91\n          ],\n          [\n            370.4,\n            495.47\n          ],\n          [\n            370.17,\n            544.02\n          ]\n        ]\n      },\n      {\n        \"label\": \"right card edge, above the mug\",\n        \"ref\": [\n          [\n            560,\n            100\n          ],\n          [\n            560,\n            475.0\n          ]\n        ],\n        \"n\": 8,\n        \"w\": 2,\n        \"scene\": [\n          [\n            611.83,\n            217.68\n          ],\n          [\n            611.76,\n            230.88\n          ],\n          [\n            611.69,\n            244.08\n          ],\n          [\n            611.62,\n            257.28\n          ],\n          [\n            611.56,\n            270.48\n          ],\n          [\n            611.49,\n            283.68\n          ],\n          [\n            611.42,\n            296.88\n          ],\n          [\n            611.35,\n            310.08\n          ],\n          [\n            611.28,\n            323.27\n          ],\n          [\n            611.21,\n            336.47\n          ],\n          [\n            611.14,\n            349.66\n          ],\n          [\n            611.07,\n            362.86\n          ],\n          [\n            611.0,\n            376.05\n          ],\n          [\n            610.93,\n            389.25\n          ],\n          [\n            610.86,\n            402.44\n          ],\n          [\n            610.79,\n            415.64\n          ]\n        ]\n      }\n    ]\n  },\n  \"old_silhouette\": [\n    [\n      372.03,\n      163.2\n    ],\n    [\n      612.03,\n      179.66\n    ],\n    [\n      610.0,\n      566.0\n    ],\n    [\n      370.0,\n      578.0\n    ]\n  ],\n  \"occluders\": [\n    {\n      \"label\": \"mug in front of the lower right corner\",\n      \"polygon\": [\n        [\n          592.0,\n          438.0\n        ],\n        [\n          592.0,\n          652.0\n        ],\n        [\n          592.53,\n          653.77\n        ],\n        [\n          594.11,\n          655.51\n        ],\n        [\n          596.72,\n          657.18\n        ],\n        [\n          600.3,\n          658.75\n        ],\n        [\n          604.78,\n          660.2\n        ],\n        [\n          610.09,\n          661.5\n        ],\n        [\n          616.13,\n          662.62\n        ],\n        [\n          622.78,\n          663.54\n        ],\n        [\n          629.91,\n          664.25\n        ],\n        [\n          637.4,\n          664.73\n        ],\n        [\n          645.11,\n          664.97\n        ],\n        [\n          652.89,\n          664.97\n        ],\n        [\n          660.6,\n          664.73\n        ],\n        [\n          668.09,\n          664.25\n        ],\n        [\n          675.22,\n          663.54\n        ],\n        [\n          681.87,\n          662.62\n        ],\n        [\n          687.91,\n          661.5\n        ],\n        [\n          693.22,\n          660.2\n        ],\n        [\n          697.7,\n          658.75\n        ],\n        [\n          701.28,\n          657.18\n        ],\n        [\n          703.89,\n          655.51\n        ],\n        [\n          705.47,\n          653.77\n        ],\n        [\n          706.0,\n          652.0\n        ],\n        [\n          706.0,\n          438.0\n        ],\n        [\n          705.47,\n          436.23\n        ],\n        [\n          703.89,\n          434.49\n        ],\n        [\n          701.28,\n          432.82\n        ],\n        [\n          697.7,\n          431.25\n        ],\n        [\n          693.22,\n          429.8\n        ],\n        [\n          687.91,\n          428.5\n        ],\n        [\n          681.87,\n          427.38\n        ],\n        [\n          675.22,\n          426.46\n        ],\n        [\n          668.09,\n          425.75\n        ],\n        [\n          660.6,\n          425.27\n        ],\n        [\n          652.89,\n          425.03\n        ],\n        [\n          645.11,\n          425.03\n        ],\n        [\n          637.4,\n          425.27\n        ],\n        [\n          629.91,\n          425.75\n        ],\n        [\n          622.78,\n          426.46\n        ],\n        [\n          616.13,\n          427.38\n        ],\n        [\n          610.09,\n          428.5\n        ],\n        [\n          604.78,\n          429.8\n        ],\n        [\n          600.3,\n          431.25\n        ],\n        [\n          596.72,\n          432.82\n        ],\n        [\n          594.11,\n          434.49\n        ],\n        [\n          592.53,\n          436.23\n        ],\n        [\n          592.0,\n          438.0\n        ]\n      ]\n    }\n  ],\n  \"grade\": {\n    \"gain\": \"white_level\",\n    \"white_percentile\": 92,\n    \"window\": 41,\n    \"erode\": 4,\n    \"deep_erode\": 20,\n    \"colour\": \"reference\",\n    \"ref_white_box\": [\n      60,\n      290,\n      160,\n      330\n    ],\n    \"relight\": {\n      \"sigma\": 14\n    }\n  },\n  \"finish\": {\n    \"blur\": \"auto\",\n    \"blur_probe\": null,\n    \"grain\": \"auto\",\n    \"edge_softness\": 0.6,\n    \"rolloff\": 0.85\n  },\n  \"fill\": {\n    \"dilate\": 2\n  }\n}\n",
+      "job_path": ""
+    },
+    "class_type": "ImagePostLoadJob",
+    "_meta": {
+      "title": "Load Job"
+    }
+  },
+  "4": {
+    "inputs": {
+      "job": [
+        "3",
+        0
+      ],
+      "scene": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "ImagePostJobMasks",
+    "_meta": {
+      "title": "Job Masks"
+    }
+  },
+  "5": {
+    "inputs": {
+      "job": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "ImagePostFitWarp",
+    "_meta": {
+      "title": "Fit Warp"
+    }
+  },
+  "6": {
+    "inputs": {
+      "job": [
+        "3",
+        0
+      ],
+      "homography": [
+        "5",
+        0
+      ],
+      "scene": [
+        "1",
+        0
+      ],
+      "reference": [
+        "2",
+        0
+      ],
+      "reference_mask": [
+        "2",
+        1
+      ]
+    },
+    "class_type": "ImagePostWarpReference",
+    "_meta": {
+      "title": "Warp Reference"
+    }
+  },
+  "7": {
+    "inputs": {
+      "job": [
+        "3",
+        0
+      ],
+      "scene": [
+        "1",
+        0
+      ],
+      "warped": [
+        "6",
+        0
+      ],
+      "product_mask": [
+        "6",
+        1
+      ],
+      "old_silhouette": [
+        "4",
+        0
+      ],
+      "occluder_mask": [
+        "4",
+        1
+      ],
+      "colour": "job",
+      "shading": "job",
+      "reference": [
+        "2",
+        0
+      ],
+      "coords": [
+        "6",
+        3
+      ],
+      "relight": "job"
+    },
+    "class_type": "ImagePostGradeToScene",
+    "_meta": {
+      "title": "Grade To Scene"
+    }
+  },
+  "8": {
+    "inputs": {
+      "job": [
+        "3",
+        0
+      ],
+      "scene": [
+        "1",
+        0
+      ],
+      "graded": [
+        "7",
+        0
+      ],
+      "product_mask": [
+        "6",
+        1
+      ],
+      "old_silhouette": [
+        "4",
+        0
+      ],
+      "occluder_mask": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "ImagePostMatchFinish",
+    "_meta": {
+      "title": "Match Finish"
+    }
+  },
+  "9": {
+    "inputs": {
+      "job": [
+        "3",
+        0
+      ],
+      "scene": [
+        "1",
+        0
+      ],
+      "product_mask": [
+        "6",
+        1
+      ],
+      "old_silhouette": [
+        "4",
+        0
+      ],
+      "occluder_mask": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "ImagePostFillLeftovers",
+    "_meta": {
+      "title": "Fill Leftovers"
+    }
+  },
+  "10": {
+    "inputs": {
+      "job": [
+        "3",
+        0
+      ],
+      "scene": [
+        "1",
+        0
+      ],
+      "background": [
+        "9",
+        0
+      ],
+      "product": [
+        "8",
+        0
+      ],
+      "product_mask": [
+        "6",
+        1
+      ],
+      "occluder_mask": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "ImagePostCompositeBehind",
+    "_meta": {
+      "title": "Composite Behind"
+    }
+  },
+  "11": {
+    "inputs": {
+      "job": [
+        "3",
+        0
+      ],
+      "before": [
+        "1",
+        0
+      ],
+      "after": [
+        "10",
+        0
+      ],
+      "reference": [
+        "2",
+        0
+      ],
+      "matte": [
+        "10",
+        1
+      ],
+      "fill_mask": [
+        "9",
+        1
+      ],
+      "reference_mask": [
+        "2",
+        1
+      ],
+      "align_report": [
+        "5",
+        1
+      ],
+      "grade_report": [
+        "7",
+        2
+      ],
+      "finish_report": [
+        "8",
+        1
+      ],
+      "fill_report": [
+        "9",
+        2
+      ]
+    },
+    "class_type": "ImagePostQASheet",
+    "_meta": {
+      "title": "QA Sheet"
+    }
+  },
+  "12": {
+    "inputs": {
+      "images": [
+        "10",
+        0
+      ],
+      "filename_prefix": "image-post/imagepost_demo_scene_refined"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save refined image"
+    }
+  },
+  "13": {
+    "inputs": {
+      "images": [
+        "11",
+        0
+      ],
+      "filename_prefix": "image-post/qa/compare"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save QA compare"
+    }
+  },
+  "14": {
+    "inputs": {
+      "images": [
+        "11",
+        1
+      ],
+      "filename_prefix": "image-post/qa/edges"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save QA edges"
+    }
+  },
+  "15": {
+    "inputs": {
+      "images": [
+        "11",
+        2
+      ],
+      "filename_prefix": "image-post/qa/before_after"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save QA before_after"
+    }
+  },
+  "16": {
+    "inputs": {
+      "images": [
+        "6",
+        2
+      ],
+      "filename_prefix": "image-post/qa/align_overlay"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save QA align_overlay"
+    }
+  },
+  "17": {
+    "inputs": {
+      "images": [
+        "7",
+        1
+      ],
+      "filename_prefix": "image-post/qa/grade_preview"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save QA grade_preview"
+    }
+  },
+  "18": {
+    "inputs": {
+      "images": [
+        "7",
+        3
+      ],
+      "filename_prefix": "image-post/qa/relight_map"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save QA relight_map"
+    }
+  },
+  "19": {
+    "inputs": {
+      "job": [
+        "3",
+        0
+      ],
+      "scene": [
+        "1",
+        0
+      ],
+      "image": [
+        "10",
+        0
+      ],
+      "background": [
+        "9",
+        0
+      ],
+      "fill_mask": [
+        "9",
+        1
+      ],
+      "product": [
+        "8",
+        0
+      ],
+      "matte": [
+        "10",
+        1
+      ],
+      "filename_prefix": "image-post/imagepost_demo_scene_refined"
+    },
+    "class_type": "ImagePostSavePSD",
+    "_meta": {
+      "title": "Save PSD"
+    }
+  }
+}
