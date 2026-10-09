@@ -245,6 +245,153 @@ def propose_lines(img, poly_ref, H, search=6.0, shrink=0.12, n=14, max_offset=3.
     return out
 
 
+def _robust_curve(pos, offs, tol=1.0, deg=2, tries=400):
+    """A smooth side through per-sample candidate offsets (N x K, NaN = none): RANSAC over polynomials of `deg`, then
+    least squares on the samples with a candidate within tol. The paper's own edge is the one curve most samples
+    agree on: print inside and edges beyond (a bottle's base, a carrier) each fool one walk, on part of the side.
+    -> (coefficients, share of samples on the curve, rms px) or None"""
+    N = len(pos)
+    have = np.isfinite(offs)
+    if have.any(1).sum() < deg + 2:
+        return None
+    rng = np.random.default_rng(0)
+    parts = [q for q in np.array_split(np.nonzero(have.any(1))[0], deg + 1) if len(q)]
+    if len(parts) < deg + 1:
+        return None
+
+    def support(c):
+        r = np.abs(offs - np.polyval(c, pos)[:, None])
+        r = np.where(have, r, np.inf).min(1)
+        return r <= tol, r
+
+    best, best_key = None, None
+    for _ in range(tries):
+        ii = [int(rng.choice(q)) for q in parts]
+        oo = [offs[i][have[i]][int(rng.integers(have[i].sum()))] for i in ii]
+        if len(set(ii)) < deg + 1:
+            continue
+        c = np.polyfit(pos[ii], oo, deg)
+        ok, r = support(c)
+        key = (int(ok.sum()), -float(np.sum(r[ok] ** 2)))
+        if best_key is None or key > best_key:
+            best, best_key = c, key
+    c = best
+    for _ in range(3):                                   # least squares on the agreeing samples, nearest candidate each
+        ok, _ = support(c)
+        if ok.sum() < deg + 2:
+            break
+        rr = np.abs(offs - np.polyval(c, pos)[:, None])
+        j = np.where(have, rr, np.inf).argmin(1)
+        y = offs[np.arange(N), j]
+        c = np.polyfit(pos[ok], y[ok], deg)
+    ok, r = support(c)
+    return c, float(ok.mean()), float(np.sqrt(np.mean(r[ok] ** 2))) if ok.any() else 99.0
+
+
+def label_outline(img, corners, inset=3.0, search=6.0, step=2.0, skip=0.08, tol=1.0, sharp=(), r_max=None):
+    """A generated label's own outline from 4 rough corners in order around it (within ~2 px of the true edges).
+
+    Sides: every sample walks out from `inset` px inside to the first colour edge and in from `search` px outside to
+    the first one; a robust quadratic through both sets of hits finds the curve they agree on (the paper's edge:
+    print fools the inside walk, a carrier or a bottle's base the outside one, never both on the same stretch).
+    Corners: the two sides' curves meet at the sharp corner; the paper's edge along the bisector gives the radius
+    r = d / (1 / sin(angle / 2) - 1) and an arc tangent to both sides replaces it. Corners listed in `sharp` (indices
+    into `corners`: an occluder hides them) stay sharp.
+    -> dict(polygon K x 2, sides [4 x M x 2], corners [4 x arc points], radii [4], support [4] share of samples on
+       each side's curve, rms [4] px)"""
+    C0 = np.asarray(corners, float)
+    cen = C0.mean(0)
+    L_img = img.mean(-1) if img.ndim == 3 else img
+    kw = dict(pick="first", rel=0.05, min_contrast=0.03)
+    S = []
+    for i in range(4):
+        a, b = C0[i], C0[(i + 1) % 4]
+        L = float(np.linalg.norm(b - a))
+        t = (b - a) / L
+        n = np.array([t[1], -t[0]])
+        if np.dot(n, (a + b) / 2 - cen) < 0:
+            n = -n
+        pos = np.arange(skip * L, (1 - skip) * L + 1e-6, step)
+        P = a[None] + pos[:, None] * t[None]
+        N = np.repeat(n[None], len(P), 0)
+        Tin = snap_points(img, P - inset * n[None], N, lo=-1.0, hi=inset + search, **kw)[0]
+        Tout = snap_points(img, P + search * n[None], -N, lo=-1.0, hi=search + inset, **kw)[0]
+        offs = np.c_[(Tin - P) @ n, (Tout - P) @ n]
+        fit = _robust_curve(pos, offs, tol)
+        if fit is None:
+            raise ValueError(f"side {i + 1} ({a.round(1).tolist()} -> {b.round(1).tolist()}): too few edge hits, "
+                             "check the corners")
+        S.append({"a": a, "t": t, "n": n, "L": L, "c": fit[0], "support": fit[1], "rms": fit[2]})
+
+    def at(s, p):
+        return s["a"] + p * s["t"] + np.polyval(s["c"], p) * s["n"]
+
+    def tangent(s, p):
+        d = s["t"] + np.polyval(np.polyder(s["c"]), p) * s["n"]
+        return d / np.linalg.norm(d)
+
+    corner_info = []
+    for j in range(4):                                   # corner j: side j-1 arrives, side j leaves
+        s1, s2 = S[j - 1], S[j]
+        p1, p2 = s1["L"], 0.0
+        for _ in range(5):
+            A, B = at(s1, p1), at(s2, p2)
+            T1, T2 = tangent(s1, p1), tangent(s2, p2)
+            M = np.array([T1, -T2]).T
+            if abs(np.linalg.det(M)) < 1e-6:
+                break
+            k1, _ = np.linalg.solve(M, B - A)
+            C = A + k1 * T1
+            p1, p2 = float((C - s1["a"]) @ s1["t"]), float((C - s2["a"]) @ s2["t"])
+        t_in, t_out = tangent(s1, p1), tangent(s2, p2)
+        cos_th = float(np.clip(-t_in @ t_out, -0.999, 0.999))
+        half = 0.5 * np.arccos(cos_th)
+        bis = -t_in + t_out
+        bis = bis / np.linalg.norm(bis)
+        if bis @ (cen - C) < 0:
+            bis = -bis
+        info = {"C": C, "r": 0.0, "arc": np.array([C]), "p1": p1, "p2": p2}
+        if j not in sharp:
+            k_r = 1.0 / np.sin(half) - 1.0
+            rm = r_max if r_max else 0.2 * min(s1["L"], s2["L"])
+            dmax = rm * k_r + 2.0
+            side = np.array([bis[1], -bis[0]])
+            hits = []
+            for e in (-1.0, 0.0, 1.0):
+                q = C + e * side
+                ti = snap_points(img, q[None] + dmax * bis[None], -bis[None], lo=-1.0, hi=dmax + 2.0, **kw)[0][0]
+                to = snap_points(img, q[None] - 3.0 * bis[None], bis[None], lo=-1.0, hi=dmax + 4.0, **kw)[0][0]
+                hits += [float((h - q) @ bis) for h in (ti, to) if np.isfinite(h).all()]
+            hits = [h for h in hits if -1.0 <= h <= dmax]
+            if hits:
+                d = max(0.0, float(np.median(hits)))
+                r = min(d / k_r, rm)
+                if r >= 0.5:
+                    ctr = C + bis * r / np.sin(half)
+                    q1 = C - t_in * r / np.tan(half)
+                    q2 = C + t_out * r / np.tan(half)
+                    a1 = np.arctan2(*(q1 - ctr)[::-1])
+                    a2 = np.arctan2(*(q2 - ctr)[::-1])
+                    da = (a2 - a1 + np.pi) % (2 * np.pi) - np.pi
+                    m = max(2, int(np.ceil(abs(da) * r / 1.0)))
+                    ang = a1 + da * np.linspace(0, 1, m + 1)
+                    arc = ctr[None] + r * np.c_[np.cos(ang), np.sin(ang)]
+                    info.update(r=r, arc=arc, p1=float((q1 - s1["a"]) @ s1["t"]), p2=float((q2 - s2["a"]) @ s2["t"]))
+        corner_info.append(info)
+    sides_pts, poly = [], []
+    for i in range(4):
+        s = S[i]
+        pa, pb = corner_info[i]["p2"], corner_info[(i + 1) % 4]["p1"]
+        m = max(2, int(np.ceil(abs(pb - pa) / 1.5)))
+        side = np.array([at(s, p) for p in np.linspace(pa, pb, m + 1)])
+        sides_pts.append(side)
+        poly.append(side[1:-1])
+        poly.append(corner_info[(i + 1) % 4]["arc"])
+    return {"polygon": np.vstack(poly), "sides": sides_pts, "corners": [c["arc"] for c in corner_info],
+            "sharp": [c["C"] for c in corner_info], "radii": [round(float(c["r"]), 2) for c in corner_info],
+            "support": [round(s["support"], 2) for s in S], "rms": [round(s["rms"], 2) for s in S]}
+
+
 def snap_silhouette(img, poly_ref, H, out=10.0, back=2.0, step=1.0, push=1.5, margin=1.0, corner_reach=12.0):
     """The generated product's outline: from just inside the real outline (mapped by H) walk outward and stop at
     the first edge, where the generated product's colour ends: taller tops of a hallucinated outline are covered,

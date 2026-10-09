@@ -6,6 +6,7 @@
   fill      fill thick enough to show as a smear
   squeeze   (cylinder) print within a few degrees of the scene's silhouette, pressed into the edge
   edges     an edge line still more than 1.5 px off after the fit
+  cut       (shape 'generated') real print outside the generated label's shape, cut off
 
 Each finding: {"check", "level" (FAIL | WARN | INFO), "box" [x0, y0, x1, y1] scene px, "text"}. FAIL and WARN need a
 look at qa/audit.png (before | after tiles of every finding) before delivery.
@@ -101,8 +102,9 @@ def squeeze_info(H, refmask, ref_shape, ref_lin):
     return out
 
 
-def run(crop_u8, after_u8, alpha, old, vis, F, offset, align_rep=None, squeeze=None):
-    """-> (findings, audit sheet PIL image or None). squeeze: {side: {"print": deg the print reaches, "limb": deg}}."""
+def run(crop_u8, after_u8, alpha, old, vis, F, offset, align_rep=None, squeeze=None, cut=None):
+    """-> (findings, audit sheet PIL image or None). squeeze: {side: {"print": deg the print reaches, "limb": deg}}.
+    cut: real print outside the visible shape (shape 'generated'), which the shape cuts off."""
     found = []
     prod = (alpha > 0.5) & (vis > 0.5)
     ys, xs = np.nonzero(prod)
@@ -126,6 +128,13 @@ def run(crop_u8, after_u8, alpha, old, vis, F, offset, align_rep=None, squeeze=N
     near = prod & (d_in <= band) & (pden > 0.02) & (bden > 0.02)
     db, dp = dist(crop_u8, bgm), dist(crop_u8, pm)
     cov = near & (db < 0.5 * dp) & (dp > 30)
+    # ...unless the generated product has that colour further in nearby (a printed band running out to its edge)
+    h = int(band)
+    for y, x in zip(*np.nonzero(cov)):
+        y0_, x0_ = max(y - h, 0), max(x - h, 0)
+        g = gen[y0_:y + h + 1, x0_:x + h + 1] & (d_in[y0_:y + h + 1, x0_:x + h + 1] > d_in[y, x] + 2)
+        if g.any() and dist(crop_u8[y0_:y + h + 1, x0_:x + h + 1][g], crop_u8[y, x].astype(float)).min() < 14:
+            cov[y, x] = False
     for c in sorted(_components(cov, offset, 4), key=lambda c: -c["px"])[:6]:
         lvl = "FAIL" if c["thick"] >= t_fail and c["px"] >= max(12, 0.004 * prod.sum()) else \
               "WARN" if c["thick"] >= 2.5 else "INFO"
@@ -149,6 +158,13 @@ def run(crop_u8, after_u8, alpha, old, vis, F, offset, align_rep=None, squeeze=N
         if c["thick"] >= max(2.5, 0.02 * size):
             found.append({"check": "fill", "level": "WARN", "box": c["box"],
                           "text": f"fill {c['thick']:.0f} px thick over {c['px']} px: check it doesn't smear"})
+
+    # cut: the real print reaches past the generated label's shape and is cut off there
+    if cut is not None:
+        for c in sorted(_components(cut, offset, 3), key=lambda c: -c["px"])[:4]:
+            found.append({"check": "cut", "level": "FAIL" if c["px"] >= 8 else "WARN", "box": c["box"],
+                          "text": f"{c['px']} px of the real print fall outside the generated label's shape and are cut "
+                                  "off: the print sits too near that edge (fit, residual) or the shape was measured short"})
 
     # squeeze: print pressed into a cylinder's silhouette. The scene sees the bottle turned by (limb - 90) deg; print at
     # angle a shows cos(a + turn) / cos(a) as wide as in the packshot (hidden past 90 deg)

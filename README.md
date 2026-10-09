@@ -33,8 +33,8 @@ There is one node per step. The math is the image-post engine's (`imgpost/`, see
 | **Warp Reference** | job, homography, scene, reference, `reference_mask`? | `warped`, `product_mask`, `align_overlay`, `coords` | supersampled warp in linear light; warns when the outline takes in the packshot's backdrop (a light rim) or a bottle's measured edge sits past its drop shadow |
 | **Grade To Scene** | job, scene, warped, masks, `colour`, `shading`, `reference`?, `coords`?, `relight`? | `graded`, `grade_preview`, `report`, `relight_map`, `ink` | light falloff, colour, the scene's paper field, cylinder shading, relight; `ink` feeds Composite Behind for jobs with `matte: ink` |
 | **Match Finish** | job, scene, graded, masks | `product`, `report` | highlight roll-off, blur and grain match |
-| **Fill Leftovers** | job, scene, masks | `background`, `fill_mask`, `report` | harmonic fill; stops with FILL STOPPED |
-| **Composite Behind** | job, scene, background, product, product_mask, occluder_mask, `ink`? | `image`, `matte` | composite and paste into the scene; with `matte: ink`, only the print goes over the scene's own surface |
+| **Fill Leftovers** | job, scene, masks, `coords`? | `background`, `fill_mask`, `report` | harmonic fill; stops with FILL STOPPED. With `shape: generated` it needs Warp Reference's `coords` |
+| **Composite Behind** | job, scene, background, product, product_mask, occluder_mask, `ink`?, `coords`? | `image`, `matte` | composite and paste into the scene; with `matte: ink`, only the print goes over the scene's own surface; with `shape: generated`, the generated product's own outline is the matte (needs `coords`) |
 | **QA Sheet** (audit) | ..., `old_silhouette`?, `occluder_mask`?, `coords`? | ..., `audit` | with the masks connected the run audits itself: a missed occluder, a rim of the generated product, a thick fill, print pressed into a bottle's edge, edges off; FAIL blocks delivery |
 | **QA Sheet** | job, before, after, reference, matte, fill_mask, reports? | `compare`, `edges`, `before_after`, `report` | QA sheets and `report.json` |
 | **Save PSD** | job, scene, image, background, fill_mask, product, matte, `filename_prefix` | (file) | layered PSD for hand finishing |
@@ -130,6 +130,7 @@ A failed run has `status.status_str: "error"`, with the node and `exception_mess
   - `residual`: a smooth correction onto the generated edges a rigid fit can't follow.
   - `cylinder.limb_min`, `"one_sided": true` lines: keep a label from being turned until its print is pressed into a bottle's edge.
 - `old_silhouette`: the generated product's outline in scene px. The fill restores the background inside it wherever the real product doesn't reach. `auto` (or `{"type": "auto", "measured": [...]}`) takes the fitted outline, plus measured slivers where the generated product sticks out; Job Masks then needs Warp Reference's product_mask.
+- `shape: generated` (labels on a bottle the job keeps): the visible product takes the generated label's measured outline (`old_silhouette.measured`), and the real label, bled past its edge (`reference_outline.bleed`, reference px), fills it. Its corners, a narrower stretch, glass beside it and a wall over a corner stay as the frame drew them. The QA Sheet then also reports `shape` and audits `cut` (real print falling outside the shape).
 - `occluders`: objects in front, each one of:
   - a `polyline` plus a `side`;
   - a `polygon`;
@@ -160,6 +161,7 @@ In-process results on 2026-10-08:
 | 17 production jobs from one 4096 × 4096 frame: cards, boxes and a pouch, glossy and plastic-wrapped packs with relight and sheen, six cans with cylinder shading, a partly hidden pack fitted to its print's perspective, a user-supplied fixed render | all pass. 8 jobs identical, 8 within 1 level on 1 or 2 pixels, 1 with a 12 × 11 px patch up to 8 levels. The 3 PSDs checked have the engine's layers and flatten within 1 level |
 | The same 17 jobs chained back to front through the pack alone, against the frame the engine delivered | within 1 level: 734 of 16.8 million pixels differ |
 | Labels on bottles (engine 0.5.0): cylinder fits with and without the residual correction at 4096 and 1024 px, a flattened packshot under the scene's paper field, auto sharpen, and a text block with the ink matte | all pass, within 1 level on 0 to 10 pixels |
+| Labels in their generated shape (engine 0.7.0): three 1024 px labels with `shape: generated`, one behind a wall | all pass, within 1 level on 0 to 3 pixels; the `shape` and `audit` reports match the engine's |
 
 ComfyUI passes images between nodes in 32-bit floats, where the engine keeps 64-bit, so a value can land on the other side of a threshold. The 12 × 11 px patch is where relight's fine pass kept a slightly different region. Nothing outside the work boxes differed in any run.
 

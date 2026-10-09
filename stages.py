@@ -40,6 +40,16 @@ def work_box(job, Hs, Ws):
             min(Ws, int(round(job["roi"][2]))), min(Hs, int(round(job["roi"][3])))]
 
 
+def generated_cover(job, roi):
+    """shape 'generated': the generated product's measured outline (old_silhouette.measured, all of it) as coverage
+    over the work box (run.py's gen_cov)"""
+    osil = job.get("old_silhouette")
+    oc = osil if isinstance(osil, dict) else {}
+    if not oc.get("measured"):
+        raise StageError("shape 'generated' needs old_silhouette {\"type\": \"auto\", \"measured\": [[x, y], ...]}")
+    return mk.poly_cover(roi, oc["measured"], ss=4)
+
+
 # 1. geometry: warp the reference into the work box
 
 def fit_warp(job):
@@ -72,8 +82,10 @@ def reference_mask(job, ref_u8, ref_a):
 def warp(job, H, refmask, scene_u8, ref_u8, roi):
     """-> (W_lin, a_new, (U, V) reference coords per work-box pixel, align overlay PIL image, info). H: a 3 x 3 matrix
     or a geometry mapping (cylinder, residual). info: {"warnings": the limb guard's lines, "squeeze": how far round
-    the print reaches against the scene's silhouette (cylinders), for the audit}."""
-    info = {"warnings": [], "squeeze": None}
+    the print reaches against the scene's silhouette (cylinders), for the audit; with shape 'generated' also
+    "bleed" (the bled real outline's coverage), "cut" (real print outside the generated shape) and "shape" (the
+    report entry)}."""
+    info = {"warnings": [], "squeeze": None, "bleed": None, "cut": None, "shape": None}
     x0, y0, x1, y1 = roi
     crop = im.to_float(scene_u8[y0:y1, x0:x1])
     ref_lin = im.srgb_to_lin(im.to_float(ref_u8))
@@ -94,6 +106,25 @@ def warp(job, H, refmask, scene_u8, ref_u8, roi):
         pre = 0.6 if af.local_scale(H, P.mean(0)) < 1.0 else 0.0
     W_lin, a_new, (U, V) = wp.warp(ref_lin, H, roi, refmask, ss=job.get("supersample", 4), prefilter=pre)
     occ = job.get("occluders", [])
+    if job.get("shape") == "generated":
+        # a label on a product the job keeps: its visible shape is the generated label's own (measured from inside:
+        # rounded corners, a rim of glass, a narrower stretch), and the real label, bled past its edge, fills it
+        from scipy.ndimage import distance_transform_edt
+        gen_cov = generated_cover(job, roi)
+        if refmask.bleed <= 0:
+            raise StageError("shape 'generated' needs reference_outline.bleed (ref px) so the real label reaches the shape's edge")
+        vis = mk.visibility(roi, occ)
+        real = a_new >= 0.5
+        old = gen_cov > 0.5
+        a_bleed = wp.bleed_cover(H, roi, refmask)
+        info["shape"] = {"generated_px": int(old.sum()),
+                         "real_past_shape_px": round(float(distance_transform_edt(~old)[real].max()), 2) if real.any() else 0.0,
+                         "shape_past_real_px": round(float(distance_transform_edt(~real)[old].max()), 2) if old.any() else 0.0,
+                         "unreached_px": int((old & (a_bleed < 0.5) & (vis > 0.5)).sum())}
+        info["bleed"] = a_bleed
+        # the real print falling outside the generated shape is cut off: the generated label is too small there
+        Lw = im.lum(W_lin)
+        info["cut"] = (a_new > 0.5) & (gen_cov < 0.5) & (vis > 0.5) & (Lw < 0.45 * np.percentile(Lw[a_new > 0.5], 90))
     outline_scene = geo.map_polygon(H, refmask.polygon).tolist() if refmask.polygon else None
     overlay = qa.overlay_align(crop, im.lin_to_srgb(W_lin), a_new, roi, outline_scene,
                                [mk.occluder_polygon(roi, o) for o in occ])
@@ -122,6 +153,8 @@ def scene_masks(job, roi, a_new=None):
     x0, y0 = roi[0], roi[1]
     vis = mk.visibility(roi, job.get("occluders", []))
     osil = job["old_silhouette"]
+    if job.get("shape") == "generated":
+        return generated_cover(job, roi) > 0.5, vis
     if osil == "auto" or isinstance(osil, dict):
         # the generated product's outline taken from the fit (it follows the generated edges, with the residual
         # correction): stray snapped points can't bulge it, and a label replaced edge to edge needs no fill ring.
@@ -313,14 +346,20 @@ def finish(fs, gs, scene_u8, roi, graded, a_new, old, vis):
 
 # 4. fill the background where the generated product showed and the real one doesn't
 
-def fill(fls, scene_u8, roi, a_new, old, vis, matte=None):
-    """-> (background sRGB float, work box; fill mask F; fill report). Raises StageError (FILL STOPPED)."""
+def fill(fls, scene_u8, roi, a_new, old, vis, matte=None, shape=None):
+    """-> (background sRGB float, work box; fill mask F; fill report). Raises StageError (FILL STOPPED).
+    shape (shape 'generated'): {"cover": generated_cover, "bleed": Warp Reference's bleed, "edge_softness"}."""
     x0, y0, x1, y1 = roi
     crop = im.to_float(scene_u8[y0:y1, x0:x1])
     dil = int(fls.get("dilate", 2))
     old_dil = binary_dilation(old, iterations=dil) if dil > 0 else old.copy()   # scipy: iterations 0 = until it fills everything
     visb = vis > 0.5
     F = old_dil & visb & ((a_new < 0.98) | ink_mode(matte))    # an ink matte covers only its ink: clear all generated print
+    if shape is not None:
+        # the generated shape: fill only where the bled label can't reach. Its edge pixels share the new label's edge
+        # (both are the generated outline's coverage), so the scene's own blend stays under them: a fill there would
+        # show its background and grain through the anti-aliasing as specks
+        F = (shape["cover"] > 0.5) & visb & (np.clip(2 * shape["bleed"], 0, 1) < 0.98)
     D = binary_dilation(F) & ~old_dil & visb
     # specks boxed in between the product and an occluder (a few px) take their colour from whatever borders them
     orphans = fl.anchor_orphans(F, D, int(fls.get("orphan_px", 16)))
@@ -338,14 +377,31 @@ def fill(fls, scene_u8, roi, a_new, old, vis, matte=None):
     rep = {"pixels": int(nfill), "grain_std": [round(float(v), 4) for v in gstd]}
     if orphans:
         rep["orphans"] = {"regions": orphans["n"], "px": orphans["px"]}
+    if shape is not None:
+        # the outline's anti-aliased pixels hold generated paper already: under the new edge they show the background
+        # nearby (its local mean, no grain) so the new paper isn't counted twice (a light rim)
+        from scipy.ndimage import uniform_filter
+        gen_cov = shape["cover"]
+        a_sh = np.clip(gaussian_filter(gen_cov, shape["edge_softness"]), 0, 1)
+        bgpx = (gen_cov <= 0.02) & (vis > 0.99)
+        wsum = uniform_filter(bgpx.astype(float), 5)
+        bmean = np.stack([uniform_filter(base[..., c] * bgpx, 5) for c in range(3)], -1) / np.maximum(wsum, 1e-6)[..., None]
+        rim = (gen_cov > 0.02) & (a_sh < 0.98) & (vis > 0.99) & ~F & (wsum > 0.04)
+        base[rim] = bmean[rim]
+        rep["edge_px"] = int(rim.sum())
     return base, F, rep
 
 
 # 5. composite behind the occluders
 
-def composite(fs, base, card, a_new, vis, ink=None, matte=None):
-    """-> (work box uint8, matte). With the job's matte 'ink', `ink` is the grade stage's ink output."""
-    alpha = np.clip(gaussian_filter(a_new, fs.get("edge_softness", 0.45)), 0, 1) * vis
+def composite(fs, base, card, a_new, vis, ink=None, matte=None, shape=None):
+    """-> (work box uint8, matte). With the job's matte 'ink', `ink` is the grade stage's ink output; with shape
+    'generated', `shape` as for fill()."""
+    if shape is not None:
+        alpha = np.clip(gaussian_filter(shape["cover"], fs.get("edge_softness", 0.45)), 0, 1) * \
+            np.clip(2 * shape["bleed"], 0, 1) * vis
+    else:
+        alpha = np.clip(gaussian_filter(a_new, fs.get("edge_softness", 0.45)), 0, 1) * vis
     if ink_mode(matte):
         # print only: the packshot's ink as coverage in the ink's colour, over the scene's own surface (the fill has
         # taken the generated print away), so a patch of packshot background never shows its edge
@@ -385,10 +441,11 @@ def qa_sheets(res, scene_u8, ref_u8, refmask, alpha, F, roi):
     return qa.before_after(before, after), qa.compare_sheet(before, after, ref_u8[ry0:ry1, rx0:rx1]), tiles
 
 
-def audit(res, scene_u8, alpha, old, vis, F, roi, align_rep=None, squeeze=None):
+def audit(res, scene_u8, alpha, old, vis, F, roi, align_rep=None, squeeze=None, cut=None):
     """run.py's audit -> (findings, audit sheet PIL image or None, verdict line)"""
     x0, y0, x1, y1 = roi
-    found, sheet = au.run(scene_u8[y0:y1, x0:x1], res[y0:y1, x0:x1], alpha, old, vis, F, (x0, y0), align_rep, squeeze)
+    found, sheet = au.run(scene_u8[y0:y1, x0:x1], res[y0:y1, x0:x1], alpha, old, vis, F, (x0, y0), align_rep, squeeze,
+                          cut)
     lines = [f"audit      {f['level']:4s} {f['check']}: {f['text']}" + (f" at {f['box']}" if f.get("box") else "")
              for f in found if f["level"] != "INFO"]
     worst = "FAIL" if any(f["level"] == "FAIL" for f in found) else "WARN" if any(f["level"] == "WARN" for f in found) else "clean"

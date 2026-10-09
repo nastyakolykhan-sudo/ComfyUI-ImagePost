@@ -1,22 +1,22 @@
 {
   "skill": "~/Documents/Claude/image-post",
-  "imgpost_version": "0.6.0",
+  "imgpost_version": "0.7.0",
   "synced": "2026-10-09",
   "files": {
-    "__init__.py": "9a70603b5c504b95e67c47431604388c4d8ee60edb805eab1fc9a74394157014",
-    "audit.py": "241f532f739c29daf69452999d72e0ba47184550adf91b0c7d58a27f948ac7bd",
-    "autofit.py": "7a0c72f3b1d61b50063746320379bf63561f376dce00c2b40008ce04ba703525",
+    "__init__.py": "1a0575284c41d990de293d06dfc348d80c81b9850b495e3e7d56926b697ecb53",
+    "audit.py": "0ff9d2e2ea329bcc1c70c68f103854ba019840c53a7e4f9fdf30fc9ff6030ceb",
+    "autofit.py": "4764cbd3241e752a0df71a59f91a3a7b9dcae916018ecedab6e86c0502f4f10e",
     "fill.py": "4267aca68ce18703a25e1bbdd32670de80bcafd5701b2cd7577f46c93722a4af",
     "finish.py": "ddf6fecf4a3246bf1d931fdcb24ae95a8067230523e72a3ac5ba6399848101f0",
     "geometry.py": "7d459ac57f74ba26c798354f3afa506667a8272a75458b3f05e16467e18ba753",
     "grade.py": "6d65670e7fd134074fdc3ab6fa5dc9a20e6d121717823d5ea5af8601c3ee6c3b",
     "images.py": "7d2e9e6f77b4f70c555bcf35412a11caa7705afbffff83e8636dbac0604d7e3d",
     "masks.py": "2f46b382f3b6f0654d603557ed3b2b39f130f7dd825ccacbe0bb725e464b91a9",
-    "outline.py": "5ea13ec701bda1c5deaa02e465493ce6411ce643f7ecbc07bc756ad1fc396988",
+    "outline.py": "134de36ca4749f6d58a5d177f2e97f90c6c84400edf6fc30cbd2992d252ad60f",
     "psd.py": "132fdcb5dd9ef88004cdb29c78a5bd67621f395c53b39e47fc8f5b1a0a13f868",
     "qa.py": "7fc25ec208b9fc73a7c650ce7ed7230628749b8724081305dc27b96c2138bbf4",
     "raster.py": "f9dc02da8f3121a741ce1ae906e1f0cea5c65b41c1b963edf032da9742816fd4",
-    "warp.py": "3686afe7fdc9d7db9a98d109310aeeb71268816c6e32b0647d6ace7d356912c0"
+    "warp.py": "b7a19675703d2464867e8c6b7dbd6cb5b3cbbde062aac71403418efec9d6a45e"
   },
-  "run_py": "8c9ad83add6a7d82118cd2dc9ca9146fad2de2f559d54c6c268755a1b7de8a12"
+  "run_py": "a8a761539b457a794d5fc124e5ee8d08c5e6032b6198262ea537099f96ce4279"
 }

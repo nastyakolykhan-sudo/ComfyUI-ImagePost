@@ -183,6 +183,10 @@
       "occluder_mask": [
         "4",
         1
+      ],
+      "coords": [
+        "6",
+        3
       ]
     },
     "class_type": "ImagePostFillLeftovers",
@@ -219,6 +223,10 @@
       "ink": [
         "7",
         4
+      ],
+      "coords": [
+        "6",
+        3
       ]
     },
     "class_type": "ImagePostCompositeBehind",

@@ -86,6 +86,18 @@ class RefMask:
             if self.polygon is None:
                 raise ValueError(f"unknown reference_outline type {t!r}")
             mask = fill_polygon((H + 2 * pad) * k, (W + 2 * pad) * k, [(self._idx(x), self._idx(y)) for x, y in self.polygon])
+        # bleed: the label's paper runs on past its real edge (each pixel there takes the colour of the nearest one
+        # 'bleed_inset' px inside), so a job whose visible shape is the generated outline can fill it to the edge
+        self.bleed = float(spec.get("bleed", 0.0))
+        self.bleed_map = None
+        if self.bleed > 0:
+            from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
+            inner = mask[::self.k, ::self.k][pad:pad + H, pad:pad + W] if self.k > 1 else mask[pad:pad + H, pad:pad + W]
+            core = binary_erosion(inner, iterations=max(1, int(round(spec.get("bleed_inset", 2.0)))))
+            if core.any():
+                iy, ix = distance_transform_edt(~core, return_distances=False, return_indices=True)
+                self.bleed_map = (inner, ix.astype(np.float32), iy.astype(np.float32))
+            self.mask_bleed = binary_dilation(mask, iterations=int(round(self.bleed * self.k))).astype(np.float32)
         self.clamps = []
         for e in spec.get("extend", []):
             side, to, cl = e["side"], float(e["to"]), float(e["clamp"])
@@ -113,8 +125,21 @@ class RefMask:
     def sample(self, u, v):
         return map_coordinates(self.mask, [self._idx(v), self._idx(u)], order=1, mode="constant", cval=0.0)
 
+    def sample_bleed(self, u, v):
+        """Coverage of the outline grown by its bleed (the plain outline without one)."""
+        m = self.mask_bleed if self.bleed > 0 else self.mask
+        return map_coordinates(m, [self._idx(v), self._idx(u)], order=1, mode="constant", cval=0.0)
+
     def clamp(self, u, v):
         us, vs = u, v
+        if self.bleed_map is not None:          # past the real edge: the colour of the nearest pixel well inside
+            inner, ix, iy = self.bleed_map
+            H, W = inner.shape
+            cu = np.clip(np.round(us).astype(int), 0, W - 1)
+            cv = np.clip(np.round(vs).astype(int), 0, H - 1)
+            out = ~inner[cv, cu]
+            us = np.where(out, ix[cv, cu], us)
+            vs = np.where(out, iy[cv, cu], vs)
         for side, cl, lo, hi in self.clamps:
             if side in ("left", "right"):
                 sel = (v >= lo) & (v <= hi)
