@@ -27,6 +27,31 @@ def blur_rgb(img, sigma):
     return np.stack([gaussian_filter(img[..., c], sigma) for c in range(img.shape[2])], -1) if sigma > 0 else img
 
 
+def sharpen_to(img, box, target, lum, cover, max_amount=2.5, threshold=0.012):
+    """Unsharp mask that brings the edge blur in box down to target (the scene's), for a packshot softer than the
+    frame (a small screenshot enlarged). The blur it subtracts is taken inside the product only (normalized by its
+    coverage), so the outline gets no halo from whatever lies past it; detail below threshold (sRGB 0..1: paper
+    grain, compression noise) is left alone. -> (image, radius, amount)"""
+    s0 = edge_sigma(lum(img), box)
+    if not np.isfinite(s0) or s0 <= target:
+        return img, 0.0, 0.0
+    r = float(np.clip(np.sqrt(s0 ** 2 - target ** 2), 0.5, 2.0))
+    full = (cover > 0.99).astype(float)                    # edge pixels mix in what lies past the outline
+    soft = blur_rgb(img * full[..., None], r) / np.maximum(gaussian_filter(full, r), 1e-3)[..., None]
+    detail = (img - soft) * full[..., None]
+    mag = np.abs(detail).max(-1, keepdims=True)
+    detail = detail * np.clip((mag - threshold) / threshold, 0.0, 1.0)     # soft knee: flat paper stays flat
+    lo, hi = 0.0, max_amount
+    for _ in range(14):
+        mid = 0.5 * (lo + hi)
+        if edge_sigma(lum(np.clip(img + mid * detail, 0, 1)), box) > target:
+            lo = mid
+        else:
+            hi = mid
+    amt = 0.5 * (lo + hi)
+    return np.clip(img + amt * detail, 0, 1), r, amt
+
+
 def highpass(img, sigma=1.2):
     return img - blur_rgb(img, sigma)
 

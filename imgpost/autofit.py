@@ -19,7 +19,7 @@ from scipy.ndimage import (binary_erosion, binary_fill_holes, gaussian_filter, g
                            map_coordinates, maximum_filter, sobel)
 
 from . import qa
-from .geometry import apply_H, line_through
+from .geometry import apply_H, as_matrix, line_through
 
 LUMA = np.array([0.2126, 0.7152, 0.0722])
 
@@ -459,7 +459,7 @@ def refine_points(scene, ref, H, pairs, radius=5, half=None, min_ncc=0.85, min_g
     for p_ref, rough in pairs:
         p_ref, rough = np.asarray(p_ref, float), np.asarray(rough, float)
         h = half or int(np.clip(round(10 * max(local_scale(H, p_ref), 0.4)), 6, 12))
-        m = match_at(scene, prefiltered(ref, H, p_ref), H, p_ref, rough, radius, h)
+        m = match_at(scene, prefiltered(ref, H, p_ref), as_matrix(H, p_ref), p_ref, rough, radius, h)
         if m is None:
             out.append({"ref": p_ref.tolist(), "rough": rough.tolist(), "scene": rough.tolist(), "ncc": None,
                         "gap": None, "trusted": False, "moved": 0.0, "why": "too close to the frame edge"})
@@ -502,7 +502,7 @@ def suggest_landmarks(scene, ref, ref_mask, H, k=8, radius=4, min_ncc=0.9, min_g
     pts, _ = corners(small @ LUMA, binary_erosion(ms, iterations=half + 2), n=n, min_dist=6)
     found = []
     for p in np.c_[(pts[:, 0] + 0.5) * f - 0.5, (pts[:, 1] + 0.5) * f - 0.5]:
-        m = match_at(scene, ref_s, H, p, apply_H(H, [p])[0], radius, half)
+        m = match_at(scene, ref_s, as_matrix(H, p), p, apply_H(H, [p])[0], radius, half)
         if m and m["ncc"] >= min_ncc and m["gap"] >= min_gap:
             found.append({"ref": [round(float(p[0]), 1), round(float(p[1]), 1)],
                           "scene": [round(v, 2) for v in m["scene"]], "ncc": m["ncc"], "gap": m["gap"]})
@@ -522,7 +522,7 @@ def match_sheet(scene, ref, H, points, half=8, scale=5):
     tiles = []
     for i, m in enumerate(points):
         c = np.asarray(m["scene"], float)
-        Hs = _shift(H, c - apply_H(H, [m["ref"]])[0])
+        Hs = _shift(as_matrix(H, m["ref"]), c - apply_H(H, [m["ref"]])[0])
         a = render_patch(prefiltered(ref, H, m["ref"]), Hs, c, half)
         d = np.arange(-half, half + 1, dtype=float)
         X, Y = np.meshgrid(c[0] + d, c[1] + d)

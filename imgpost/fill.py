@@ -11,6 +11,24 @@ class FillError(RuntimeError):
     pass
 
 
+def anchor_orphans(F, D, max_px=16):
+    """Regions of F with no D neighbour and at most max_px pixels (specks boxed in between the product's new edge
+    and an occluder): their 4-neighbour ring outside F, to add to D so they take the colour of what borders them.
+    -> dict(ring, n, px) or None. Larger orphans are left for harmonic_fill to report."""
+    from scipy.ndimage import binary_dilation
+    if max_px <= 0 or not F.any():
+        return None
+    lab, nl = label(F)
+    anch = np.zeros(nl + 1, bool)
+    anch[lab[binary_dilation(D) & F]] = True
+    sizes = np.bincount(lab.ravel(), minlength=nl + 1)
+    small = [i for i in range(1, nl + 1) if not anch[i] and sizes[i] <= max_px]
+    if not small:
+        return None
+    O = np.isin(lab, small)
+    return {"ring": binary_dilation(O) & ~F, "n": len(small), "px": int(O.sum())}
+
+
 def harmonic_fill(img, F, D, offset=(0, 0)):
     """Solve Laplace on F with values from D (4-neighbours) and zero flux elsewhere (occluders, the product).
 

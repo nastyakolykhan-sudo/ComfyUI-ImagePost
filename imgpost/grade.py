@@ -214,6 +214,66 @@ def _local_white(L, mask, block):
     return np.maximum(_to_pixels(f, L.shape, block, block), 1e-4)
 
 
+def paper_field(img_lin, mask, size=31, sigma=3.0, pre=1.0):
+    """Colour of a label's paper under the light, per pixel: the scene's white with whatever tint and falloff its
+    light gives it (warm bounce from amber glass or fruit near a bottle's edge, the darkening toward its limb). Per
+    channel, a grey-scale closing (size px, square) lifts away everything dark and narrower than size (text, a
+    wordmark's strokes, a printed band) and keeps smooth ramps of light; then a light Gaussian. Outside mask the
+    nearest inside pixel stands in, so neighbours (glass, an occluder) don't leak in. size must exceed the widest
+    dark print. -> h x w x 3 linear."""
+    from scipy.ndimage import distance_transform_edt, grey_closing
+    idx = distance_transform_edt(~mask, return_distances=False, return_indices=True)
+    # near the edge a large closing overshoots light that falls off faster and faster (toward a bottle's limb):
+    # there a small one takes over (print near a label's edge is small), blended by the distance from the edge
+    small = max(5, size // 4) | 1
+    w = np.clip(distance_transform_edt(mask) / float(size), 0.0, 1.0)[..., None]
+    out = []
+    for c in range(3):
+        ch = gaussian_filter(img_lin[..., c][tuple(idx)], pre)          # the envelope of paper, not of its noise
+        out.append(np.stack([grey_closing(ch, size=(size, size)), grey_closing(ch, size=(small, small))], -1))
+    out = np.stack(out, -2)                                              # h x w x 3 x (big, small)
+    env = w * out[..., 0] + (1 - w) * out[..., 1]
+    # the envelope sits on the bright side of the paper's grain and mottling: the field is the mean of the pixels
+    # it marks as paper (within 8 % of it), spread over the print it lifted away (normalized convolution)
+    filled = np.stack([gaussian_filter(img_lin[..., c][tuple(idx)], pre) for c in range(3)], -1)
+    paper = (lum(filled) >= 0.92 * lum(env)).astype(float)
+    sp = max(sigma, size / 4.0)
+    den = gaussian_filter(paper, sp)
+    f = np.stack([gaussian_filter(filled[..., c] * paper, sp) for c in range(3)], -1) / np.maximum(den, 1e-6)[..., None]
+    f = np.where((den > 0.05)[..., None], f, env)
+    return np.maximum(np.stack([gaussian_filter(f[..., c], sigma) for c in range(3)], -1), 1e-4)
+
+
+def flatten(ref_lin, inside, mode="field", columns=True):
+    """The packshot's own light on its label paper taken out, so the paper reads 1.0 everywhere. "columns" divides
+    by a per-column paper level (exact for a cylinder's steep falloff toward its limbs); "field" does that when
+    columns is on (cylinders), then divides by the 2D paper field (paper_field: the rest, e.g. light from top to
+    bottom). A flat product skips the column step: its per-column noise would print as stripes. -> flattened"""
+    flat = flatten_columns(ref_lin, inside)[0] if (columns or mode == "columns") else ref_lin
+    if mode == "columns":
+        return flat
+    ys, xs = np.nonzero(inside)
+    size = 2 * max(2, round(min(np.ptp(ys), np.ptp(xs)) / 24)) + 1
+    return flat / paper_field(flat, inside, size, max(1.0, size / 10))
+
+
+def flatten_columns(ref_lin, inside, pct=92, sigma=2.0):
+    """The packshot's own light on a cylinder's label (its studio falloff toward the limbs) taken out: each column's
+    paper level (pct-th percentile over the label's rows, per channel, lightly smoothed along x) divided out, so the
+    paper reads 1.0 everywhere. -> (flattened reference, profile per column, n columns x 3)"""
+    from scipy.ndimage import gaussian_filter1d
+    cols = np.nonzero(inside.sum(0) >= 8)[0]
+    prof = np.full((ref_lin.shape[1], 3), np.nan)
+    for x in cols:
+        prof[x] = np.percentile(ref_lin[inside[:, x], x], pct, axis=0)
+    ok = np.isfinite(prof[:, 0])
+    xs = np.arange(ref_lin.shape[1])
+    for c in range(3):
+        prof[:, c] = np.interp(xs, xs[ok], prof[ok, c])
+    prof = np.maximum(gaussian_filter1d(prof, sigma, axis=0, mode="nearest"), 1e-3)
+    return ref_lin / prof[None, :, :], prof
+
+
 def materials(W_lin, mask, k=10, iters=12, seed=3):
     """Material ids from the real packshot's own colours (k-means on log-luminance + chromaticity of the warped
     reference, which carries no scene light). Each ink or paper is a tight cluster, so one id = one material."""

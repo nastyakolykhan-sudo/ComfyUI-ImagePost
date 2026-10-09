@@ -211,6 +211,10 @@
       "occluder_mask": [
         "4",
         1
+      ],
+      "ink": [
+        "7",
+        4
       ]
     },
     "class_type": "ImagePostCompositeBehind",

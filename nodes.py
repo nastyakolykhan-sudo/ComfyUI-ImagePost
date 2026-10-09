@@ -19,6 +19,7 @@ import torch
 JOB = "IMAGEPOST_JOB"
 HOMOGRAPHY = "IMAGEPOST_HOMOGRAPHY"
 COORDS = "IMAGEPOST_COORDS"   # reference coordinates of every work-box pixel, float64 (grade.shading reads them)
+INK = "IMAGEPOST_INK"         # the grade's white field and ink colour, for the job's matte 'ink' (None otherwise)
 CATEGORY = "image/image-post"
 
 COLOUR_CHOICES = ["job", "scene", "reference"]
@@ -247,8 +248,9 @@ class ImagePostFitWarp:
     FUNCTION = "fit"
     CATEGORY = CATEGORY
     DESCRIPTION = (
-        "Fits the reference -> scene homography (or affine) to the job's align points, y_only/x_only rows and "
-        "edge lines. Shows the residual table; accept visible edge lines at 1.5 px or less."
+        "Fits the reference -> scene mapping (homography, affine, or a cylinder for labels on bottles, plus the "
+        "optional residual edge correction) to the job's align points, y_only/x_only rows, edge lines and curves "
+        "and limbs. Shows the residual table; accept visible edge lines at 1.5 px or less."
     )
 
     def fit(self, job):
@@ -280,8 +282,9 @@ class ImagePostWarpReference:
         su8, box, _ = _scene(job, scene)
         ru8, ra = _reference(job, reference, reference_mask)
         refmask = _refmask(job, ru8, ra)
-        W_lin, a_new, (U, V), overlay = _stages().warp(job, np.asarray(homography, float), refmask, su8, ru8, box)
-        _fr, warn = _stages().fringe(refmask, ru8)
+        H = homography if hasattr(homography, "forward") else np.asarray(homography, float)
+        W_lin, a_new, (U, V), overlay = _stages().warp(job, H, refmask, su8, ru8, box)
+        _fr, warn = _stages().fringe(refmask, ru8, H)
         result = (_image_out(_to_layer(W_lin)), _mask_out(a_new), _pil_out(overlay), {"box": box, "u": U, "v": V})
         return {"ui": {"text": [warn or "outline clear of the packshot's backdrop"]}, "result": result}
 
@@ -314,8 +317,8 @@ class ImagePostGradeToScene:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "STRING", "IMAGE")
-    RETURN_NAMES = ("graded", "grade_preview", "report", "relight_map")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "STRING", "IMAGE", INK)
+    RETURN_NAMES = ("graded", "grade_preview", "report", "relight_map", "ink")
     FUNCTION = "grade"
     CATEGORY = CATEGORY
     DESCRIPTION = (
@@ -323,7 +326,8 @@ class ImagePostGradeToScene:
         "white_level, luma_ratio or none), then per-channel tone curves (colour scene) or the real product's own "
         "colours between scene white and black points (colour reference), then grade.shading for cylinders and "
         "grade.relight for the light the smooth grade misses (cast shadows, glows, gloss). relight_map shows "
-        "where relight changed the light (blue darker, red brighter); a dark placeholder when it didn't run."
+        "where relight changed the light (blue darker, red brighter); a dark placeholder when it didn't run. "
+        "ink: for a job with matte 'ink' (print only, over the scene's own surface), connect it to Composite Behind."
     )
 
     def grade(self, job, scene, warped, product_mask, old_silhouette, occluder_mask, colour, shading,
@@ -340,10 +344,11 @@ class ImagePostGradeToScene:
         ru8 = _reference(job, reference)[0] if reference is not None else None
         if coords is not None and list(coords["box"]) != list(box):
             raise ValueError(f"coords were computed for work box {coords['box']}, not {box}: re-run Warp Reference")
-        graded, rep, preview, sheet = _stages().grade(gs, su8, ru8, box, _from_layer(_layer(warped, box, hw, "warped")),
-                                                      a_new, old, vis, None if coords is None else coords["u"])
+        graded, rep, preview, sheet, ink = _stages().grade(gs, su8, ru8, box, _from_layer(_layer(warped, box, hw, "warped")),
+                                                           a_new, old, vis, None if coords is None else coords["u"],
+                                                           job.get("matte"))
         return (_image_out(_to_layer(graded)), _pil_out(preview), json.dumps({"grade": rep}),
-                _pil_out(sheet) if sheet else _placeholder())
+                _pil_out(sheet) if sheet else _placeholder(), ink)
 
 
 class ImagePostMatchFinish:
@@ -388,7 +393,7 @@ class ImagePostFillLeftovers:
     def fill(self, job, scene, product_mask, old_silhouette, occluder_mask):
         su8, box, hw = _scene(job, scene)
         a_new, old, vis = _box_masks(job, box, hw, product_mask, old_silhouette, occluder_mask)
-        base, F, rep = _stages().fill(job.get("fill", {}), su8, box, a_new, old, vis)
+        base, F, rep = _stages().fill(job.get("fill", {}), su8, box, a_new, old, vis, job.get("matte"))
         return (_image_out(base), _mask_out(F), json.dumps({"fill": rep}))
 
 
@@ -396,7 +401,8 @@ class ImagePostCompositeBehind:
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {"job": (JOB,), "scene": ("IMAGE",), "background": ("IMAGE",), "product": ("IMAGE",),
-                             "product_mask": ("MASK",), "occluder_mask": ("MASK",)}}
+                             "product_mask": ("MASK",), "occluder_mask": ("MASK",)},
+                "optional": {"ink": (INK, {"tooltip": "Grade To Scene's ink: needed when the job sets matte 'ink'"})}}
 
     RETURN_TYPES = ("IMAGE", "MASK")
     RETURN_NAMES = ("image", "matte")
@@ -408,12 +414,12 @@ class ImagePostCompositeBehind:
         "the skill's output. Pixels outside the work box are passed through untouched."
     )
 
-    def composite(self, job, scene, background, product, product_mask, occluder_mask):
+    def composite(self, job, scene, background, product, product_mask, occluder_mask, ink=None):
         _, box, hw = _scene(job, scene)
         out, alpha = _stages().composite(job.get("finish", {}), _layer(background, box, hw, "background"),
                                          _layer(product, box, hw, "product"),
                                          _mask(product_mask, box, hw, "product_mask"),
-                                         1.0 - _mask(occluder_mask, box, hw, "occluder_mask"))
+                                         1.0 - _mask(occluder_mask, box, hw, "occluder_mask"), ink, job.get("matte"))
         x0, y0, x1, y1 = box
         image = scene[:1].detach().to("cpu", torch.float32).clone()
         image[0, y0:y1, x0:x1, :3] = torch.from_numpy(out.astype(np.float32) / 255.0)

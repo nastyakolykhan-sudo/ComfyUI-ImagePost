@@ -29,12 +29,12 @@ There is one node per step. The math is the image-post engine's (`imgpost/`, see
 |---|---|---|---|
 | **Load Job** | `job_json` (text) or `job_path` | `job` | reads and checks the job |
 | **Job Masks** | job, scene | `old_silhouette`, `occluder_mask` | rasterises the generated outline and the foreground objects |
-| **Fit Warp** | job | `homography`, `report` | homography or affine fit; shows the residual table |
+| **Fit Warp** | job | `homography`, `report` | homography, affine or cylinder fit (labels on bottles), with the optional residual edge correction; shows the residual table |
 | **Warp Reference** | job, homography, scene, reference, `reference_mask`? | `warped`, `product_mask`, `align_overlay`, `coords` | supersampled warp in linear light; warns when the outline takes in the packshot's backdrop (a light rim) |
-| **Grade To Scene** | job, scene, warped, masks, `colour`, `shading`, `reference`?, `coords`?, `relight`? | `graded`, `grade_preview`, `report`, `relight_map` | light falloff, colour, cylinder shading, relight |
+| **Grade To Scene** | job, scene, warped, masks, `colour`, `shading`, `reference`?, `coords`?, `relight`? | `graded`, `grade_preview`, `report`, `relight_map`, `ink` | light falloff, colour, the scene's paper field, cylinder shading, relight; `ink` feeds Composite Behind for jobs with `matte: ink` |
 | **Match Finish** | job, scene, graded, masks | `product`, `report` | highlight roll-off, blur and grain match |
 | **Fill Leftovers** | job, scene, masks | `background`, `fill_mask`, `report` | harmonic fill; stops with FILL STOPPED |
-| **Composite Behind** | job, scene, background, product, product_mask, occluder_mask | `image`, `matte` | composite and paste into the scene |
+| **Composite Behind** | job, scene, background, product, product_mask, occluder_mask, `ink`? | `image`, `matte` | composite and paste into the scene; with `matte: ink`, only the print goes over the scene's own surface |
 | **QA Sheet** | job, before, after, reference, matte, fill_mask, reports? | `compare`, `edges`, `before_after`, `report` | QA sheets and `report.json` |
 | **Save PSD** | job, scene, image, background, fill_mask, product, matte, `filename_prefix` | (file) | layered PSD for hand finishing |
 
@@ -125,15 +125,17 @@ A failed run has `status.status_str: "error"`, with the node and `exception_mess
   - `points`: 3 or more landmarks read on both images, such as wordmark or panel corners.
   - `lines`: visible outline edges.
   - `y_only` / `x_only`: rows or columns of repeated items.
-  - `model`: `homography` or `affine`.
+  - `model`: `homography`, `affine`, or `cylinder` for print on a bottle or jar (`cylinder`, `limbs`, `"curve": true` lines).
+  - `residual`: a smooth correction onto the generated edges a rigid fit can't follow.
 - `old_silhouette`: the generated product's outline in scene px. The fill restores the background inside it wherever the real product doesn't reach.
 - `occluders`: objects in front, each one of:
   - a `polyline` plus a `side`;
   - a `polygon`;
   - either of those with `soften` for an out-of-focus edge.
-- `grade`: `gain` (`white_level`, `luma_ratio`, `none`), `colour`, `shading`, `relight`. On printed packaging whose generated print is laid out differently, `luma_ratio` with `match_hue` reads the light only where both images show the same ink; `protect_white` keeps the packshot's clipped whites from being dimmed.
-- `finish`: `blur` and `grain` (`auto` or a value), `edge_softness`, `rolloff`.
-- `fill`: `dilate`.
+- `grade`: `gain` (`white_level`, `luma_ratio`, `none`), `colour`, `shading`, `relight`. On printed packaging whose generated print is laid out differently, `luma_ratio` with `match_hue` reads the light only where both images show the same ink; `protect_white` keeps the packshot's clipped whites from being dimmed. For labels, `ref_flatten` takes the packshot's own light off its paper and `white_field` lays the generated label's paper colour (light, falloff, tint) under it.
+- `finish`: `blur` and `grain` (`auto` or a value), `edge_softness`, `rolloff`, `sharpen: auto` (a packshot softer than the frame).
+- `fill`: `dilate`, `orphan_px`.
+- `prefilter`: `auto` for a small packshot enlarged in the frame. `matte`: `ink` for text printed on a coloured body.
 - `psd`: true to also write the layered PSD.
 
 Measure landmarks and edges by colour change, not by the strongest gradient, and accept a fit at 1.5 px or less on the visible edge lines. The image-post engine's job spec documents every field.
@@ -155,6 +157,7 @@ In-process results on 2026-10-08:
 | The demo, with `--psd` | identical pixels; the PSDs are byte-identical |
 | 17 production jobs from one 4096 × 4096 frame: cards, boxes and a pouch, glossy and plastic-wrapped packs with relight and sheen, six cans with cylinder shading, a partly hidden pack fitted to its print's perspective, a user-supplied fixed render | all pass. 8 jobs identical, 8 within 1 level on 1 or 2 pixels, 1 with a 12 × 11 px patch up to 8 levels. The 3 PSDs checked have the engine's layers and flatten within 1 level |
 | The same 17 jobs chained back to front through the pack alone, against the frame the engine delivered | within 1 level: 734 of 16.8 million pixels differ |
+| Labels on bottles (engine 0.5.0): cylinder fits with and without the residual correction at 4096 and 1024 px, a flattened packshot under the scene's paper field, auto sharpen, and a text block with the ink matte | all pass, within 1 level on 0 to 10 pixels |
 
 ComfyUI passes images between nodes in 32-bit floats, where the engine keeps 64-bit, so a value can land on the other side of a threshold. The 12 × 11 px patch is where relight's fine pass kept a slightly different region. Nothing outside the work boxes differed in any run.
 

@@ -46,7 +46,7 @@ def definition(job_text):
                                                          "old_silhouette": L(4, 0), "occluder_mask": L(4, 1)}, (1330, 0)),
         10: ("ImagePostCompositeBehind", "Composite Behind", {"job": L(3, 0), "scene": L(1, 0), "background": L(9, 0),
                                                               "product": L(8, 0), "product_mask": L(6, 1),
-                                                              "occluder_mask": L(4, 1)}, (1330, 500)),
+                                                              "occluder_mask": L(4, 1), "ink": L(7, 4)}, (1330, 500)),
         11: ("ImagePostQASheet", "QA Sheet", {"job": L(3, 0), "before": L(1, 0), "after": L(10, 0), "reference": L(2, 0),
                                               "matte": L(10, 1), "fill_mask": L(9, 1), "reference_mask": L(2, 1),
                                               "align_report": L(5, 1), "grade_report": L(7, 2),
