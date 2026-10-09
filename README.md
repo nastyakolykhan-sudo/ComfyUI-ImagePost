@@ -30,11 +30,12 @@ There is one node per step. The math is the image-post engine's (`imgpost/`, see
 | **Load Job** | `job_json` (text) or `job_path` | `job` | reads and checks the job |
 | **Job Masks** | job, scene | `old_silhouette`, `occluder_mask` | rasterises the generated outline and the foreground objects |
 | **Fit Warp** | job | `homography`, `report` | homography, affine or cylinder fit (labels on bottles), with the optional residual edge correction; shows the residual table |
-| **Warp Reference** | job, homography, scene, reference, `reference_mask`? | `warped`, `product_mask`, `align_overlay`, `coords` | supersampled warp in linear light; warns when the outline takes in the packshot's backdrop (a light rim) |
+| **Warp Reference** | job, homography, scene, reference, `reference_mask`? | `warped`, `product_mask`, `align_overlay`, `coords` | supersampled warp in linear light; warns when the outline takes in the packshot's backdrop (a light rim) or a bottle's measured edge sits past its drop shadow |
 | **Grade To Scene** | job, scene, warped, masks, `colour`, `shading`, `reference`?, `coords`?, `relight`? | `graded`, `grade_preview`, `report`, `relight_map`, `ink` | light falloff, colour, the scene's paper field, cylinder shading, relight; `ink` feeds Composite Behind for jobs with `matte: ink` |
 | **Match Finish** | job, scene, graded, masks | `product`, `report` | highlight roll-off, blur and grain match |
 | **Fill Leftovers** | job, scene, masks | `background`, `fill_mask`, `report` | harmonic fill; stops with FILL STOPPED |
 | **Composite Behind** | job, scene, background, product, product_mask, occluder_mask, `ink`? | `image`, `matte` | composite and paste into the scene; with `matte: ink`, only the print goes over the scene's own surface |
+| **QA Sheet** (audit) | ..., `old_silhouette`?, `occluder_mask`?, `coords`? | ..., `audit` | with the masks connected the run audits itself: a missed occluder, a rim of the generated product, a thick fill, print pressed into a bottle's edge, edges off; FAIL blocks delivery |
 | **QA Sheet** | job, before, after, reference, matte, fill_mask, reports? | `compare`, `edges`, `before_after`, `report` | QA sheets and `report.json` |
 | **Save PSD** | job, scene, image, background, fill_mask, product, matte, `filename_prefix` | (file) | layered PSD for hand finishing |
 
@@ -127,7 +128,8 @@ A failed run has `status.status_str: "error"`, with the node and `exception_mess
   - `y_only` / `x_only`: rows or columns of repeated items.
   - `model`: `homography`, `affine`, or `cylinder` for print on a bottle or jar (`cylinder`, `limbs`, `"curve": true` lines).
   - `residual`: a smooth correction onto the generated edges a rigid fit can't follow.
-- `old_silhouette`: the generated product's outline in scene px. The fill restores the background inside it wherever the real product doesn't reach.
+  - `cylinder.limb_min`, `"one_sided": true` lines: keep a label from being turned until its print is pressed into a bottle's edge.
+- `old_silhouette`: the generated product's outline in scene px. The fill restores the background inside it wherever the real product doesn't reach. `auto` (or `{"type": "auto", "measured": [...]}`) takes the fitted outline, plus measured slivers where the generated product sticks out; Job Masks then needs Warp Reference's product_mask.
 - `occluders`: objects in front, each one of:
   - a `polyline` plus a `side`;
   - a `polygon`;

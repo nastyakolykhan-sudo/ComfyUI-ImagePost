@@ -2,4 +2,4 @@
 
 Coordinate convention everywhere: integer coordinates are pixel centres, x right, y down.
 """
-__version__ = "0.5.0"
+__version__ = "0.6.0"

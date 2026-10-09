@@ -7,7 +7,8 @@ Constraints (job['align']):
   x_only : [{"ref": [x, y], "scene_x": x, "w": 1, "label": ""}]
   lines  : [{"ref": [[x0, y0], [x1, y1]], "n": 12, "scene": [[x, y], ...], "w": 1, "label": ""}]
            the reference segment must land on the straight line through the scene points; with "curve": true
-           on the smooth curve through them (a label's top edge on a bottle seen from above or below)
+           on the smooth curve through them (a label's top edge on a bottle seen from above or below); with
+           "one_sided": true it must reach the line but may run past it (away from the product's middle)
 Models: "homography" (default), "affine", "cylinder" (align.cylinder {"axis_x", "radius"} in reference px,
 optional align.perspective, and align.limbs [{"side": "left|right", "scene": [[x, y], ...], "rows": [v0, v1]}]: the
 scene's silhouette of the bottle on that side, which a label wrapping past it ends at).
@@ -233,6 +234,12 @@ class Curve:
         return f[np.arange(len(self.S)), k]
 
 
+def _one_sided(d, sd, pull=0.15):
+    """Falling short of the edge (inside the product) costs fully; running past it only a weak pull, so the edge
+    stays put unless another constraint needs it to move out."""
+    return np.where(d * sd > 0, d * sd, pull * d * sd)
+
+
 def _dist(L, q):
     if isinstance(L, Curve):
         return L.dist(q)
@@ -273,10 +280,14 @@ def _add_residual(H, spec, rep):
     its 6 neighbours along the same edge by more than outlier px is a stray and is left out."""
     cfg = spec["residual"] if isinstance(spec["residual"], dict) else {}
     S_all, D_all, src = [], [], []
+    cen = np.vstack([np.asarray(l["scene"], float) for l in spec.get("lines", [])]).mean(0) if spec.get("lines") else None
     for i, l in enumerate(spec.get("lines", [])):
         C = Curve(l["scene"])
+        D = C.S - C.nearest(apply_H(H, segment(l["ref"], max(int(l.get("n", 12)), 60))))
+        if l.get("one_sided"):           # past the generated edge is allowed: correct only where the model falls short
+            D = np.where((((C.S - cen) * D).sum(1) > 0)[:, None], D, 0.0)
         S_all.append(C.S)
-        D_all.append(C.S - C.nearest(apply_H(H, segment(l["ref"], max(int(l.get("n", 12)), 60)))))
+        D_all.append(D)
         src += [l.get("label", f"line {i}")] * len(C.S)
     if isinstance(H, Cylinder):
         for l in spec.get("limbs", []):
@@ -298,9 +309,25 @@ def _add_residual(H, spec, rep):
     after, k0 = [], 0
     for i, l in enumerate(spec.get("lines", [])):                 # on the points kept (strays don't count)
         d = Curve(l["scene"]).dist(apply_H(R, segment(l["ref"], max(int(l.get("n", 12)), 60))))
+        if l.get("one_sided"):
+            a, b, c = line_through(l["scene"])
+            q = apply_H(R, segment(l["ref"], max(int(l.get("n", 12)), 60)))
+            sd = float(np.sign(a * cen[0] + b * cen[1] + c)) or 1.0
+            d = np.maximum((a * q[:, 0] + b * q[:, 1] + c) * sd, 0.0)
+            d = np.full(len(Curve(l["scene"]).S), float(d.max()))
         kk = keep[k0:k0 + len(d)]
         k0 += len(d)
         after.append({"label": l.get("label", f"line {i}"), "max_px": round(float(np.abs(d[kk]).max()) if kk.any() else 0.0, 2)})
+    if isinstance(H, Cylinder):                       # the silhouette after the correction, on the points kept
+        for l in spec.get("limbs", []):
+            C = Curve(l["scene"])
+            q = H.limb_points(l["side"], np.linspace(*l.get("rows", (0, 1)), 80))
+            dx, dy = R.shift(q[:, 0], q[:, 1])
+            d = C.dist(q + np.c_[dx, dy])
+            kk = keep[k0:k0 + len(d)]
+            k0 += len(d)
+            after.append({"label": l.get("label", f"{l['side']} limb"),
+                          "max_px": round(float(np.abs(d[kk]).max()) if kk.any() else 0.0, 2)})
     rep["residual"] = {"sigma": round(float(sigma), 1), "max_shift_px": round(R.max_shift, 2),
                        "controls": int(keep.sum()), "dropped": sorted({src[j] for j in np.nonzero(~keep)[0]}),
                        "dropped_n": int((~keep).sum()), "lines_after": after}
@@ -316,9 +343,22 @@ def _fit_base(spec):
     ps = np.array([q["scene"] for q in P], float)
     pw = np.array([q.get("w", 1.0) for q in P], float)[:, None]
     Yo, Xo = spec.get("y_only", []), spec.get("x_only", [])
+    # one_sided lines (a label's edge the real one must cover, but may run past onto glass): the interior side is
+    # the one holding the centroid of every scene point measured
+    allS = [np.asarray(q["scene"], float)[None] for q in P] + [np.asarray(l["scene"], float) for l in spec.get("lines", [])]
+    cen = np.vstack(allS).mean(0)
+
+    def side(l):
+        if not l.get("one_sided"):
+            return None
+        if l.get("curve"):
+            raise ValueError(f"align.lines {l.get('label', '')!r}: one_sided works on straight lines only")
+        a, b, c = line_through(l["scene"])
+        return float(np.sign(a * cen[0] + b * cen[1] + c)) or 1.0
+
     lines = [(segment(l["ref"], l.get("n", 40 if l.get("curve") else 12)),
               Curve(l["scene"]) if l.get("curve") else line_through(l["scene"]),
-              float(l.get("w", 1.0)), l.get("label", f"line {i}")) for i, l in enumerate(spec.get("lines", []))]
+              float(l.get("w", 1.0)), l.get("label", f"line {i}"), side(l)) for i, l in enumerate(spec.get("lines", []))]
     reg = float(spec.get("perspective_reg", 0.0))
     if model == "cylinder":
         return _fit_cylinder(spec, pr, ps, pw, Yo, Xo, lines, reg)
@@ -332,9 +372,9 @@ def _fit_base(spec):
         if Xo:
             q = apply_H(H, [c["ref"] for c in Xo])
             r.append((q[:, 0] - np.array([c["scene_x"] for c in Xo])) * np.array([c.get("w", 1.0) for c in Xo]))
-        for pts, L, w, _ in lines:
+        for pts, L, w, _, sd in lines:
             q = apply_H(H, pts)
-            r.append(w * _dist(L, q))
+            r.append(w * (_dist(L, q) if sd is None else _one_sided(_dist(L, q), sd)))
         if model != "affine" and reg:
             r.append(reg * np.asarray(p[6:8]))
         return np.concatenate(r)
@@ -356,6 +396,9 @@ def _fit_cylinder(spec, pr, ps, pw, Yo, Xo, lines, reg):
     # limbs: the scene's silhouette (a label wrapping past it ends there), as rows of the reference
     limbs = [(l["side"], Curve(l["scene"]), float(l.get("w", 1.0)), np.linspace(*l.get("rows", (pr[:, 1].min(), pr[:, 1].max())), 40),
               l.get("label", f"{l['side']} limb")) for l in spec.get("limbs", [])]
+    lmin = cy.get("limb_min")
+    lmin = None if lmin is None else float(lmin)
+    lw = float(cy.get("limb_w", 3.0))
 
     def make(p):
         return Cylinder(ax, rad, p[0:6], p[6:8], p[8:11] if persp else (0.0, 0.0, 0.0), cy.get("wrap", 0.0))
@@ -369,10 +412,15 @@ def _fit_cylinder(spec, pr, ps, pw, Yo, Xo, lines, reg):
         if Xo:
             q = H.forward([c["ref"] for c in Xo])
             r.append((q[:, 0] - np.array([c["scene_x"] for c in Xo])) * np.array([c.get("w", 1.0) for c in Xo]))
-        for pts, L, w, _ in lines:
-            r.append(w * _dist(L, H.forward(pts)))
+        for pts, L, w, _, sd in lines:
+            d = _dist(L, H.forward(pts))
+            r.append(w * (d if sd is None else _one_sided(d, sd)))
         for side, L, w, v, _ in limbs:
             r.append(w * L.dist(H.limb_points(side, v)))
+        if lmin is not None:             # print may not be turned into the silhouette: |limb angle| >= limb_min
+            for side in {l[0] for l in limbs} or {"right"}:
+                deg = abs(float(np.degrees(H.limb_angle(side))))
+                r.append(np.array([lw * max(0.0, lmin - deg)]))
         if persp and reg:
             r.append(reg * np.asarray(p[8:11]))
         return np.concatenate(r)
@@ -391,6 +439,8 @@ def _fit_cylinder(spec, pr, ps, pw, Yo, Xo, lines, reg):
         d = L.dist(H.limb_points(side, v))
         rep["lines"].append({"label": lab, "max_px": round(float(np.abs(d).max()), 2), "mean_px": round(float(d.mean()), 2)})
         rep["cylinder"][f"{side}_limb_deg"] = round(float(np.degrees(H.limb_angle(side))), 1)
+    if lmin is not None:
+        rep["cylinder"]["limb_min"] = lmin
     return H, rep
 
 
@@ -402,10 +452,14 @@ def _report(H, spec, pr, ps, lines):
         for c in spec.get(key, []):
             d = apply_H(H, [c["ref"]])[0, axis] - c[coord]
             rep[key].append({"label": c.get("label", ""), "d": round(float(d), 2)})
-    for pts, L, _, lab in lines:
+    for pts, L, _, lab, sd in lines:
         q = apply_H(H, pts)
         d = _dist(L, q)
-        rep["lines"].append({"label": lab, "max_px": round(float(np.abs(d).max()), 2), "mean_px": round(float(d.mean()), 2)})
+        e = {"label": lab, "max_px": round(float(np.abs(d).max()), 2), "mean_px": round(float(d.mean()), 2)}
+        if sd is not None:               # one-sided: only falling short of the generated edge counts
+            e.update(one_sided=True, max_px=round(float(np.maximum(d * sd, 0.0).max()), 2),
+                     past_px=round(float(np.maximum(-d * sd, 0.0).max()), 2))
+        rep["lines"].append(e)
     if isinstance(H, Cylinder):
         rep["cylinder"] = H.to_json()
     return rep

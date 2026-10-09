@@ -36,6 +36,10 @@
       "scene": [
         "1",
         0
+      ],
+      "product_mask": [
+        "6",
+        1
       ]
     },
     "class_type": "ImagePostJobMasks",
@@ -267,6 +271,18 @@
       "fill_report": [
         "9",
         2
+      ],
+      "old_silhouette": [
+        "4",
+        0
+      ],
+      "occluder_mask": [
+        "4",
+        1
+      ],
+      "coords": [
+        "6",
+        3
       ]
     },
     "class_type": "ImagePostQASheet",
@@ -363,6 +379,19 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save QA relight_map"
+    }
+  },
+  "20": {
+    "inputs": {
+      "images": [
+        "11",
+        4
+      ],
+      "filename_prefix": "image-post/qa/audit"
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save QA audit"
     }
   },
   "19": {

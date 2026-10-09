@@ -221,7 +221,9 @@ class ImagePostLoadJob:
 class ImagePostJobMasks:
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"job": (JOB,), "scene": ("IMAGE",)}}
+        return {"required": {"job": (JOB,), "scene": ("IMAGE",)},
+                "optional": {"product_mask": ("MASK", {"tooltip": "Warp Reference's product_mask: needed when the job's "
+                                                       "old_silhouette is 'auto' (the fitted outline)"})}}
 
     RETURN_TYPES = ("MASK", "MASK")
     RETURN_NAMES = ("old_silhouette", "occluder_mask")
@@ -232,9 +234,10 @@ class ImagePostJobMasks:
         "anti-aliased) over the work box. Any scene- or work-box-sized MASK can stand in for either output."
     )
 
-    def masks(self, job, scene):
-        _, box, _ = _scene(job, scene)
-        old, vis = _stages().scene_masks(job, box)
+    def masks(self, job, scene, product_mask=None):
+        _, box, hw = _scene(job, scene)
+        a_new = _mask(product_mask, box, hw, "product_mask") if product_mask is not None else None
+        old, vis = _stages().scene_masks(job, box, a_new)
         return (_mask_out(old), _mask_out(1.0 - vis))
 
 
@@ -283,10 +286,12 @@ class ImagePostWarpReference:
         ru8, ra = _reference(job, reference, reference_mask)
         refmask = _refmask(job, ru8, ra)
         H = homography if hasattr(homography, "forward") else np.asarray(homography, float)
-        W_lin, a_new, (U, V), overlay = _stages().warp(job, H, refmask, su8, ru8, box)
+        W_lin, a_new, (U, V), overlay, info = _stages().warp(job, H, refmask, su8, ru8, box)
         _fr, warn = _stages().fringe(refmask, ru8, H)
-        result = (_image_out(_to_layer(W_lin)), _mask_out(a_new), _pil_out(overlay), {"box": box, "u": U, "v": V})
-        return {"ui": {"text": [warn or "outline clear of the packshot's backdrop"]}, "result": result}
+        result = (_image_out(_to_layer(W_lin)), _mask_out(a_new), _pil_out(overlay),
+                  {"box": box, "u": U, "v": V, "squeeze": info["squeeze"]})
+        text = "\n".join([warn or "outline clear of the packshot's backdrop"] + info["warnings"])
+        return {"ui": {"text": [text]}, "result": result}
 
 
 class ImagePostGradeToScene:
@@ -434,22 +439,27 @@ class ImagePostQASheet:
             "required": {"job": (JOB,), "before": ("IMAGE",), "after": ("IMAGE",), "reference": ("IMAGE",),
                          "matte": ("MASK",), "fill_mask": ("MASK",)},
             "optional": {"reference_mask": ("MASK",), "align_report": report, "grade_report": report,
-                         "finish_report": report, "fill_report": report},
+                         "finish_report": report, "fill_report": report,
+                         "old_silhouette": ("MASK", {"tooltip": "Job Masks' old_silhouette: with it the run audits itself"}),
+                         "occluder_mask": ("MASK",), "coords": (COORDS, {"tooltip": "Warp Reference's coords (squeeze check)"})},
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "STRING")
-    RETURN_NAMES = ("compare", "edges", "before_after", "report")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "STRING", "IMAGE")
+    RETURN_NAMES = ("compare", "edges", "before_after", "report", "audit")
     FUNCTION = "qa"
     OUTPUT_NODE = True
     CATEGORY = CATEGORY
     DESCRIPTION = (
         "QA sheets: compare (before, after, reference), edges (4x before|after tiles along every boundary and "
         "fill) and before_after, plus the run's report.json (stage reports merged, change counts including "
-        "outside_roi_changed). Look at the sheets before delivering."
+        "outside_roi_changed). With old_silhouette (and occluder_mask, coords) it also audits the run: a missed "
+        "occluder, a rim of the generated product, a thick fill, print pressed into a bottle's edge, edges off. A FAIL "
+        "blocks delivery; look at every WARN tile on the audit sheet."
     )
 
     def qa(self, job, before, after, reference, matte, fill_mask, reference_mask=None,
-           align_report=None, grade_report=None, finish_report=None, fill_report=None):
+           align_report=None, grade_report=None, finish_report=None, fill_report=None,
+           old_silhouette=None, occluder_mask=None, coords=None):
         S = _stages()
         su8, box, hw = _scene(job, before, "before")
         res = _u8(after, "after")
@@ -466,8 +476,18 @@ class ImagePostQASheet:
                                                    _mask(matte, box, hw, "matte"),
                                                    _mask(fill_mask, box, hw, "fill_mask") > 0.5, box)
         edges = _pil_out(tiles) if tiles else _placeholder()
+        audit_img, verdict = _placeholder(), ""
+        if old_silhouette is not None:
+            vis = 1.0 - _mask(occluder_mask, box, hw, "occluder_mask") if occluder_mask is not None else np.ones(
+                (box[3] - box[1], box[2] - box[0]))
+            found, sheet, verdict = S.audit(res, su8, _mask(matte, box, hw, "matte"), _mask(old_silhouette, box, hw,
+                                            "old_silhouette") > 0.5, vis, _mask(fill_mask, box, hw, "fill_mask") > 0.5,
+                                            box, rep.get("align"), None if coords is None else coords.get("squeeze"))
+            rep["audit"] = found
+            rep["audit_verdict"] = verdict
+            audit_img = _pil_out(sheet) if sheet else _placeholder()
         text = json.dumps(rep, indent=2)
-        return {"ui": {"text": [text]}, "result": (_pil_out(compare), edges, _pil_out(before_after), text)}
+        return {"ui": {"text": [text]}, "result": (_pil_out(compare), edges, _pil_out(before_after), text, audit_img)}
 
 
 class ImagePostSavePSD:

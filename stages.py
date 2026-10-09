@@ -9,6 +9,7 @@ run.py's sys.exit() conditions raise StageError with the same message.
 import numpy as np
 from scipy.ndimage import binary_dilation, binary_erosion, gaussian_filter
 
+from .imgpost import audit as au
 from .imgpost import autofit as af
 from .imgpost import fill as fl
 from .imgpost import finish as fn
@@ -69,8 +70,10 @@ def reference_mask(job, ref_u8, ref_a):
 
 
 def warp(job, H, refmask, scene_u8, ref_u8, roi):
-    """-> (W_lin, a_new, (U, V) reference coords per work-box pixel, align overlay PIL image). H: a 3 x 3 matrix
-    or a geometry mapping (cylinder, residual)."""
+    """-> (W_lin, a_new, (U, V) reference coords per work-box pixel, align overlay PIL image, info). H: a 3 x 3 matrix
+    or a geometry mapping (cylinder, residual). info: {"warnings": the limb guard's lines, "squeeze": how far round
+    the print reaches against the scene's silhouette (cylinders), for the audit}."""
+    info = {"warnings": [], "squeeze": None}
     x0, y0, x1, y1 = roi
     crop = im.to_float(scene_u8[y0:y1, x0:x1])
     ref_lin = im.srgb_to_lin(im.to_float(ref_u8))
@@ -81,6 +84,7 @@ def warp(job, H, refmask, scene_u8, ref_u8, roi):
         inside = refmask.sample(rx, ry) > 0.5
         if hasattr(H, "axis_x"):                 # a cylinder's paper level is read between its limbs, not past them
             inside &= np.abs(rx - H.axis_x) <= H.r - 1.0
+            info["warnings"] += au.limb_guard(H, ref_lin, inside)
         ref_lin = gr.flatten(ref_lin, inside, "columns" if ref_flat == "columns" else "field", columns=hasattr(H, "axis_x"))
         del ry, rx
     pre = job.get("prefilter", 0.6)
@@ -93,7 +97,8 @@ def warp(job, H, refmask, scene_u8, ref_u8, roi):
     outline_scene = geo.map_polygon(H, refmask.polygon).tolist() if refmask.polygon else None
     overlay = qa.overlay_align(crop, im.lin_to_srgb(W_lin), a_new, roi, outline_scene,
                                [mk.occluder_polygon(roi, o) for o in occ])
-    return W_lin, a_new, (U, V), overlay
+    info["squeeze"] = au.squeeze_info(H, refmask, ref_u8.shape, ref_lin)
+    return W_lin, a_new, (U, V), overlay, info
 
 
 def fringe(refmask, ref_u8, H=None):
@@ -111,10 +116,32 @@ def fringe(refmask, ref_u8, H=None):
                 "measure.py fringe JOB, re-measure those sides (pitfall 45)")
 
 
-def scene_masks(job, roi):
-    """-> (old silhouette bool, visibility 0..1) over the work box"""
+def scene_masks(job, roi, a_new=None):
+    """-> (old silhouette bool, visibility 0..1) over the work box. old_silhouette "auto" needs a_new, the product
+    mask from Warp Reference."""
+    x0, y0 = roi[0], roi[1]
     vis = mk.visibility(roi, job.get("occluders", []))
-    old = mk.poly_cover(roi, job["old_silhouette"], ss=4) > 0.5   # pixel centres inside, PIL edge bleed < 1/4 px
+    osil = job["old_silhouette"]
+    if osil == "auto" or isinstance(osil, dict):
+        # the generated product's outline taken from the fit (it follows the generated edges, with the residual
+        # correction): stray snapped points can't bulge it, and a label replaced edge to edge needs no fill ring.
+        # With "measured" (the snapped generated outline), slivers where the generated product sticks out up to
+        # max_dev px join it (and get filled); vertices further out are strays and are dropped
+        if a_new is None:
+            raise StageError("old_silhouette 'auto' is the fitted outline: connect Warp Reference's product_mask to Job Masks")
+        oc = osil if isinstance(osil, dict) else {}
+        old = a_new >= oc.get("cover", 0.9)
+        if oc.get("measured"):
+            from scipy.ndimage import distance_transform_edt
+            dout = distance_transform_edt(~old)
+            Mv = np.asarray(oc["measured"], float)
+            cx = np.clip(np.round(Mv[:, 0] - x0).astype(int), 0, old.shape[1] - 1)
+            cy = np.clip(np.round(Mv[:, 1] - y0).astype(int), 0, old.shape[0] - 1)
+            keep_v = dout[cy, cx] <= float(oc.get("max_dev", 3.0))
+            if keep_v.sum() >= 3:
+                old |= mk.poly_cover(roi, Mv[keep_v].tolist(), ss=4) > 0.5
+    else:
+        old = mk.poly_cover(roi, osil, ss=4) > 0.5   # pixel centres inside, PIL edge bleed < 1/4 px
     return old, vis
 
 
@@ -356,6 +383,17 @@ def qa_sheets(res, scene_u8, ref_u8, refmask, alpha, F, roi):
     rx0, ry0, rx1, ry1 = refmask.bbox(ref_u8.shape, pad=10)
     tiles = qa.edge_tiles(before, after, ((alpha > 0.03) & (alpha < 0.97)) | F, (x0, y0))
     return qa.before_after(before, after), qa.compare_sheet(before, after, ref_u8[ry0:ry1, rx0:rx1]), tiles
+
+
+def audit(res, scene_u8, alpha, old, vis, F, roi, align_rep=None, squeeze=None):
+    """run.py's audit -> (findings, audit sheet PIL image or None, verdict line)"""
+    x0, y0, x1, y1 = roi
+    found, sheet = au.run(scene_u8[y0:y1, x0:x1], res[y0:y1, x0:x1], alpha, old, vis, F, (x0, y0), align_rep, squeeze)
+    lines = [f"audit      {f['level']:4s} {f['check']}: {f['text']}" + (f" at {f['box']}" if f.get("box") else "")
+             for f in found if f["level"] != "INFO"]
+    worst = "FAIL" if any(f["level"] == "FAIL" for f in found) else "WARN" if any(f["level"] == "WARN" for f in found) else "clean"
+    lines.append(f"audit      {worst}" + (": look at the audit sheet before delivering" if worst != "clean" else ""))
+    return found, sheet, "\n".join(lines)
 
 
 def write_psd(path, scene_u8, res, base, F, card, alpha, roi):

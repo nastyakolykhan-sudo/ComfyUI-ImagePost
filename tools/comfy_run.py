@@ -180,6 +180,8 @@ def summary(out):
         print(f"changed    {c.get('changed_px', 0):,} px, bbox {c.get('bbox')}, outside work box: {c.get('outside_roi_changed')}")
         for l in r.get("align", {}).get("lines", []):
             print(f"line       {l['label'][:40]:40s} max {l['max_px']:5.2f}")
+        if r.get("audit_verdict"):
+            print(r["audit_verdict"])
 
 
 def main():
