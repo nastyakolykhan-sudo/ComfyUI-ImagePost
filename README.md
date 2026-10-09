@@ -130,6 +130,8 @@ A failed run has `status.status_str: "error"`, with the node and `exception_mess
   - `residual`: a smooth correction onto the generated edges a rigid fit can't follow.
   - `cylinder.limb_min`, `"one_sided": true` lines: keep a label from being turned until its print is pressed into a bottle's edge.
 - `old_silhouette`: the generated product's outline in scene px. The fill restores the background inside it wherever the real product doesn't reach. `auto` (or `{"type": "auto", "measured": [...]}`) takes the fitted outline, plus measured slivers where the generated product sticks out; Job Masks then needs Warp Reference's product_mask.
+- `reference_outline.body`: polygons where the real product shows its own body (a tube's band between two labels). They take the scene's own product colour; Grade To Scene, Match Finish, Fill Leftovers and Composite Behind then need Warp Reference's `coords`.
+- `grade.paper_clean` and `finish.edge: bleed`: the packshot's paper grain, banding and edge falloff give way to the scene's paper; no rim along the outline.
 - `shape: generated` (labels on a bottle the job keeps): the visible product takes the generated label's measured outline (`old_silhouette.measured`), and the real label, bled past its edge (`reference_outline.bleed`, reference px), fills it. Its corners, a narrower stretch, glass beside it and a wall over a corner stay as the frame drew them. The QA Sheet then also reports `shape` and audits `cut` (real print falling outside the shape).
 - `occluders`: objects in front, each one of:
   - a `polyline` plus a `side`;
@@ -162,6 +164,7 @@ In-process results on 2026-10-08:
 | The same 17 jobs chained back to front through the pack alone, against the frame the engine delivered | within 1 level: 734 of 16.8 million pixels differ |
 | Labels on bottles (engine 0.5.0): cylinder fits with and without the residual correction at 4096 and 1024 px, a flattened packshot under the scene's paper field, auto sharpen, and a text block with the ink matte | all pass, within 1 level on 0 to 10 pixels |
 | Labels in their generated shape (engine 0.7.0): three 1024 px labels with `shape: generated`, one behind a wall | all pass, within 1 level on 0 to 3 pixels; the `shape` and `audit` reports match the engine's |
+| Clean paper, body regions, top text placed by the tube (engine 0.8.0): four 4096 px jobs (two bottle labels, a tube's panels with a body band, an ink-matte text block) | all pass, within 1 level; the `fill`, `shape` and `audit` reports match the engine's |
 
 ComfyUI passes images between nodes in 32-bit floats, where the engine keeps 64-bit, so a value can land on the other side of a threshold. The 12 × 11 px patch is where relight's fine pass kept a slightly different region. Nothing outside the work boxes differed in any run.
 

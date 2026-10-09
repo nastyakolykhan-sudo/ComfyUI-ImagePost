@@ -41,7 +41,7 @@ def definition(job_text):
                                                         "reference": L(2, 0), "coords": L(6, 3), "relight": "job"}, (900, 0)),
         8: ("ImagePostMatchFinish", "Match Finish", {"job": L(3, 0), "scene": L(1, 0), "graded": L(7, 0),
                                                      "product_mask": L(6, 1), "old_silhouette": L(4, 0),
-                                                     "occluder_mask": L(4, 1)}, (1330, 260)),
+                                                     "occluder_mask": L(4, 1), "coords": L(6, 3)}, (1330, 260)),
         9: ("ImagePostFillLeftovers", "Fill Leftovers", {"job": L(3, 0), "scene": L(1, 0), "product_mask": L(6, 1),
                                                          "old_silhouette": L(4, 0), "occluder_mask": L(4, 1),
                                                          "coords": L(6, 3)}, (1330, 0)),

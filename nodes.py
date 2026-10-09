@@ -170,6 +170,18 @@ def _shape(job, box, coords):
             "edge_softness": job.get("finish", {}).get("edge_softness", 0.45)}
 
 
+def _body(job, box, coords, key):
+    """reference_outline.body: Warp Reference's body coverage ('body_raw' for the grade's fit masks, 'body' for the
+    fill and the composite), or None"""
+    if not job["reference_outline"].get("body"):
+        return None
+    if coords is None or coords.get(key) is None:
+        raise ValueError("the job's reference_outline.body needs Warp Reference's coords (the body coverage): connect them")
+    if list(coords["box"]) != list(box):
+        raise ValueError(f"coords were computed for work box {coords['box']}, not {box}: re-run Warp Reference")
+    return coords[key]
+
+
 def _box_masks(job, box, hw, product_mask, old_silhouette, occluder_mask):
     a_new = _mask(product_mask, box, hw, "product_mask")
     old = _mask(old_silhouette, box, hw, "old_silhouette") > 0.5
@@ -304,7 +316,7 @@ class ImagePostWarpReference:
         _fr, warn = _stages().fringe(refmask, ru8, H)
         result = (_image_out(_to_layer(W_lin)), _mask_out(a_new), _pil_out(overlay),
                   {"box": box, "u": U, "v": V, "squeeze": info["squeeze"], "bleed": info["bleed"], "cut": info["cut"],
-                   "shape": info["shape"]})
+                   "shape": info["shape"], "body": info["body"], "body_raw": info["body_raw"]})
         lines = [warn or "outline clear of the packshot's backdrop"] + info["warnings"]
         q = info["shape"]
         if q:
@@ -372,7 +384,7 @@ class ImagePostGradeToScene:
             raise ValueError(f"coords were computed for work box {coords['box']}, not {box}: re-run Warp Reference")
         graded, rep, preview, sheet, ink = _stages().grade(gs, su8, ru8, box, _from_layer(_layer(warped, box, hw, "warped")),
                                                            a_new, old, vis, None if coords is None else coords["u"],
-                                                           job.get("matte"))
+                                                           job.get("matte"), _body(job, box, coords, "body_raw"))
         return (_image_out(_to_layer(graded)), _pil_out(preview), json.dumps({"grade": rep}),
                 _pil_out(sheet) if sheet else _placeholder(), ink)
 
@@ -381,7 +393,8 @@ class ImagePostMatchFinish:
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {"job": (JOB,), "scene": ("IMAGE",), "graded": ("IMAGE",), "product_mask": ("MASK",),
-                             "old_silhouette": ("MASK",), "occluder_mask": ("MASK",)}}
+                             "old_silhouette": ("MASK",), "occluder_mask": ("MASK",)},
+                "optional": {"coords": (COORDS, {"tooltip": "Warp Reference's coords: needed when the job sets reference_outline.body"})}}
 
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("product", "report")
@@ -392,11 +405,12 @@ class ImagePostMatchFinish:
         "blur_probe) and grain (finish.grain, auto from MAD noise in flat areas)."
     )
 
-    def finish(self, job, scene, graded, product_mask, old_silhouette, occluder_mask):
+    def finish(self, job, scene, graded, product_mask, old_silhouette, occluder_mask, coords=None):
         su8, box, hw = _scene(job, scene)
         a_new, old, vis = _box_masks(job, box, hw, product_mask, old_silhouette, occluder_mask)
         card, rep = _stages().finish(job.get("finish", {}), job.get("grade", {}), su8, box,
-                                     _from_layer(_layer(graded, box, hw, "graded")), a_new, old, vis)
+                                     _from_layer(_layer(graded, box, hw, "graded")), a_new, old, vis,
+                                     _body(job, box, coords, "body_raw"))
         return (_image_out(card), json.dumps({"finish": rep}))
 
 
@@ -420,8 +434,10 @@ class ImagePostFillLeftovers:
     def fill(self, job, scene, product_mask, old_silhouette, occluder_mask, coords=None):
         su8, box, hw = _scene(job, scene)
         a_new, old, vis = _box_masks(job, box, hw, product_mask, old_silhouette, occluder_mask)
+        bd = _body(job, box, coords, "body")
         base, F, rep = _stages().fill(job.get("fill", {}), su8, box, a_new, old, vis, job.get("matte"),
-                                      _shape(job, box, coords))
+                                      _shape(job, box, coords),
+                                      None if bd is None else {"cover": bd, "erode": job.get("grade", {}).get("erode", 4)})
         return (_image_out(base), _mask_out(F), json.dumps({"fill": rep}))
 
 
@@ -449,7 +465,7 @@ class ImagePostCompositeBehind:
                                          _layer(product, box, hw, "product"),
                                          _mask(product_mask, box, hw, "product_mask"),
                                          1.0 - _mask(occluder_mask, box, hw, "occluder_mask"), ink, job.get("matte"),
-                                         _shape(job, box, coords))
+                                         _shape(job, box, coords), _body(job, box, coords, "body"))
         x0, y0, x1, y1 = box
         image = scene[:1].detach().to("cpu", torch.float32).clone()
         image[0, y0:y1, x0:x1, :3] = torch.from_numpy(out.astype(np.float32) / 255.0)
@@ -510,7 +526,8 @@ class ImagePostQASheet:
             found, sheet, verdict = S.audit(res, su8, _mask(matte, box, hw, "matte"), _mask(old_silhouette, box, hw,
                                             "old_silhouette") > 0.5, vis, _mask(fill_mask, box, hw, "fill_mask") > 0.5,
                                             box, rep.get("align"), None if coords is None else coords.get("squeeze"),
-                                            None if coords is None else coords.get("cut"))
+                                            None if coords is None else coords.get("cut"), S.ink_mode(job.get("matte")),
+                                            job.get("shape") == "generated")
             rep["audit"] = found
             rep["audit_verdict"] = verdict
             audit_img = _pil_out(sheet) if sheet else _placeholder()

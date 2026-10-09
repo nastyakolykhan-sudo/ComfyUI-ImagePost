@@ -84,8 +84,9 @@ def warp(job, H, refmask, scene_u8, ref_u8, roi):
     or a geometry mapping (cylinder, residual). info: {"warnings": the limb guard's lines, "squeeze": how far round
     the print reaches against the scene's silhouette (cylinders), for the audit; with shape 'generated' also
     "bleed" (the bled real outline's coverage), "cut" (real print outside the generated shape) and "shape" (the
-    report entry)}."""
-    info = {"warnings": [], "squeeze": None, "bleed": None, "cut": None, "shape": None}
+    report entry); with reference_outline.body "body_raw" (where the real product shows its body) and "body" (that,
+    ending where the label's visible shape ends: what the fill and the composite use)}."""
+    info = {"warnings": [], "squeeze": None, "bleed": None, "cut": None, "shape": None, "body": None, "body_raw": None}
     x0, y0, x1, y1 = roi
     crop = im.to_float(scene_u8[y0:y1, x0:x1])
     ref_lin = im.srgb_to_lin(im.to_float(ref_u8))
@@ -98,6 +99,10 @@ def warp(job, H, refmask, scene_u8, ref_u8, roi):
             inside &= np.abs(rx - H.axis_x) <= H.r - 1.0
             info["warnings"] += au.limb_guard(H, ref_lin, inside)
         ref_lin = gr.flatten(ref_lin, inside, "columns" if ref_flat == "columns" else "field", columns=hasattr(H, "axis_x"))
+        pc = job.get("grade", {}).get("paper_clean")
+        if pc:
+            # the packshot's own paper (grain, banding, the falloff at its edges) gives way to the scene's
+            ref_lin = gr.clean_paper(ref_lin, inside, 0.06 if pc is True else float(pc))
         del ry, rx
     pre = job.get("prefilter", 0.6)
     if pre == "auto":
@@ -105,7 +110,16 @@ def warp(job, H, refmask, scene_u8, ref_u8, roi):
         P = np.asarray(refmask.polygon, float) if refmask.polygon else np.array(refmask.bbox(ref_u8.shape)).reshape(2, 2)
         pre = 0.6 if af.local_scale(H, P.mean(0)) < 1.0 else 0.0
     W_lin, a_new, (U, V) = wp.warp(ref_lin, H, roi, refmask, ss=job.get("supersample", 4), prefilter=pre)
+    a_body = None
+    if job["reference_outline"].get("body"):
+        # parts of the outline where the real product shows its own body (a tube's grey between two labels): not
+        # composited; they show the scene's body colour (the fill stage)
+        a_body = np.zeros_like(a_new)
+        for poly in job["reference_outline"]["body"]:
+            bm = ol.RefMask({"type": "polygon", "pts": poly}, ref_u8)
+            a_body = 1.0 - (1.0 - a_body) * (1.0 - wp.bleed_cover(H, roi, bm))
     occ = job.get("occluders", [])
+    gen_cov = None
     if job.get("shape") == "generated":
         # a label on a product the job keeps: its visible shape is the generated label's own (measured from inside:
         # rounded corners, a rim of glass, a narrower stretch), and the real label, bled past its edge, fills it
@@ -117,6 +131,13 @@ def warp(job, H, refmask, scene_u8, ref_u8, roi):
         real = a_new >= 0.5
         old = gen_cov > 0.5
         a_bleed = wp.bleed_cover(H, roi, refmask)
+        if hasattr(H, "axis_x") and real.any():
+            # the bleed runs in packshot px and stops at the cylinder's silhouette (past it the bottle isn't there),
+            # so a generated label reaching a few px past the fitted silhouette would come out cut there: in scene
+            # px the paper runs on as far as the bleed would on the front
+            r_sc = refmask.bleed * af.local_scale(H, np.asarray(refmask.polygon, float).mean(0)) if refmask.polygon else 0.0
+            if r_sc > 0:
+                a_bleed = np.maximum(a_bleed, np.clip(r_sc + 0.5 - distance_transform_edt(~real), 0.0, 1.0))
         info["shape"] = {"generated_px": int(old.sum()),
                          "real_past_shape_px": round(float(distance_transform_edt(~old)[real].max()), 2) if real.any() else 0.0,
                          "shape_past_real_px": round(float(distance_transform_edt(~real)[old].max()), 2) if old.any() else 0.0,
@@ -129,6 +150,11 @@ def warp(job, H, refmask, scene_u8, ref_u8, roi):
     overlay = qa.overlay_align(crop, im.lin_to_srgb(W_lin), a_new, roi, outline_scene,
                                [mk.occluder_polygon(roi, o) for o in occ])
     info["squeeze"] = au.squeeze_info(H, refmask, ref_u8.shape, ref_lin)
+    if a_body is not None:
+        # a body region is part of the label: it ends where the label (its visible shape) ends
+        es = job.get("finish", {}).get("edge_softness", 0.45)
+        info["body_raw"] = a_body
+        info["body"] = a_body * np.clip(gaussian_filter(gen_cov if gen_cov is not None else a_new, es), 0, 1)
     return W_lin, a_new, (U, V), overlay, info
 
 
@@ -180,10 +206,12 @@ def scene_masks(job, roi, a_new=None):
 
 # 2. light and colour from the generated product
 
-def fit_masks(gs, a_new, old, vis):
+def fit_masks(gs, a_new, old, vis, body=None):
     er = gs.get("erode", 4)
     inner = binary_erosion(old & (vis > 0.99), iterations=er)
     both = binary_erosion((a_new > 0.99) & old & (vis > 0.99), iterations=er)
+    if body is not None:
+        both &= body < 0.5
     if both.sum() < 200:
         raise StageError("the real and generated products barely overlap: check align and old_silhouette")
     return inner, both
@@ -193,7 +221,7 @@ def ink_mode(matte):
     return matte == "ink" or (isinstance(matte, dict) and matte.get("type") == "ink")
 
 
-def grade(gs, scene_u8, ref_u8, roi, W_lin, a_new, old, vis, U=None, matte=None):
+def grade(gs, scene_u8, ref_u8, roi, W_lin, a_new, old, vis, U=None, matte=None, body=None):
     """-> (graded linear rgb, grade report, grade preview PIL image, relight map PIL image or None, ink or None).
     ref_u8 is only read for grade.ref_white_box, U (reference x per work-box pixel) only for grade.shading.
     grade.relight's `debug` (run.py saves the relight inputs to work/) is ignored here. With the job's matte 'ink',
@@ -202,7 +230,7 @@ def grade(gs, scene_u8, ref_u8, roi, W_lin, a_new, old, vis, U=None, matte=None)
     crop = im.to_float(scene_u8[y0:y1, x0:x1])
     S_lin = im.srgb_to_lin(crop)
     Y, X = np.mgrid[y0:y1, x0:x1].astype(float)
-    inner, both = fit_masks(gs, a_new, old, vis)
+    inner, both = fit_masks(gs, a_new, old, vis, body)
     gain = gs.get("gain", "white_level")
     if gain == "white_level":
         g = gr.white_level_gain(S_lin, inner, binary_erosion(inner, iterations=gs.get("deep_erode", 20)), X, Y,
@@ -308,11 +336,19 @@ def grade(gs, scene_u8, ref_u8, roi, W_lin, a_new, old, vis, U=None, matte=None)
 
 # 3. finish: highlight roll-off, softness and grain matched to the frame
 
-def finish(fs, gs, scene_u8, roi, graded, a_new, old, vis):
-    """-> (finished product, sRGB float, work box; finish report)"""
+def finish(fs, gs, scene_u8, roi, graded, a_new, old, vis, body=None):
+    """-> (finished product, sRGB float, work box; finish report). body: Warp Reference's body_raw."""
     x0, y0, x1, y1 = roi
     crop = im.to_float(scene_u8[y0:y1, x0:x1])
-    _, both = fit_masks(gs, a_new, old, vis)
+    _, both = fit_masks(gs, a_new, old, vis, body)
+    if fs.get("edge") == "bleed":
+        # the product's own colour runs on past its edge, so the blur and the sharpen can't pull the packshot's
+        # backdrop into it (a light or dark rim along the outline)
+        from scipy.ndimage import distance_transform_edt
+        full = a_new >= 0.98
+        if full.any() and (~full).any():
+            iy, ix = distance_transform_edt(~full, return_distances=False, return_indices=True)
+            graded = graded[iy, ix]
     card = im.lin_to_srgb(gr.rolloff(graded, fs.get("rolloff", 0.85)))
     Ls = im.lum(crop)
     probe = fs.get("blur_probe")
@@ -346,7 +382,7 @@ def finish(fs, gs, scene_u8, roi, graded, a_new, old, vis):
 
 # 4. fill the background where the generated product showed and the real one doesn't
 
-def fill(fls, scene_u8, roi, a_new, old, vis, matte=None, shape=None):
+def fill(fls, scene_u8, roi, a_new, old, vis, matte=None, shape=None, body=None):
     """-> (background sRGB float, work box; fill mask F; fill report). Raises StageError (FILL STOPPED).
     shape (shape 'generated'): {"cover": generated_cover, "bleed": Warp Reference's bleed, "edge_softness"}."""
     x0, y0, x1, y1 = roi
@@ -389,12 +425,26 @@ def fill(fls, scene_u8, roi, a_new, old, vis, matte=None, shape=None):
         rim = (gen_cov > 0.02) & (a_sh < 0.98) & (vis > 0.99) & ~F & (wsum > 0.04)
         base[rim] = bmean[rim]
         rep["edge_px"] = int(rim.sum())
+    if body is not None and (body["cover"] > 0.02).any():
+        # where the real product shows its body: the scene's body colour (the generated image drew it close by)
+        a_body = body["cover"]
+        inner = binary_erosion(old & (vis > 0.99), iterations=body["erode"])
+        paper_l = float(np.percentile(im.lum(crop)[inner], 90)) if inner.any() else 1.0
+        sig = float(fls.get("body_sigma", 20))
+        B, Mb = gr.body_field(crop, a_body > 0.5, paper_l, sig)
+        if B is None:
+            raise StageError("reference_outline.body: no pixels of the product's body colour near the body region; check it")
+        bstd = fn.mad_std(fn.highpass(crop)[Mb]) if Mb.sum() > 50 else np.zeros(3)
+        B = np.clip(B + fn.make_grain(B.shape[:2], bstd, a_body > 0.02, seed=5), 0, 1)
+        base = base * (1 - a_body[..., None]) + B * a_body[..., None]
+        rep["body"] = {"px": int((a_body > 0.5).sum()), "sigma": sig,
+                       "colour_srgb": [int(v) for v in np.round(np.median(B[a_body > 0.5], 0) * 255)]}
     return base, F, rep
 
 
 # 5. composite behind the occluders
 
-def composite(fs, base, card, a_new, vis, ink=None, matte=None, shape=None):
+def composite(fs, base, card, a_new, vis, ink=None, matte=None, shape=None, body=None):
     """-> (work box uint8, matte). With the job's matte 'ink', `ink` is the grade stage's ink output; with shape
     'generated', `shape` as for fill()."""
     if shape is not None:
@@ -402,6 +452,8 @@ def composite(fs, base, card, a_new, vis, ink=None, matte=None, shape=None):
             np.clip(2 * shape["bleed"], 0, 1) * vis
     else:
         alpha = np.clip(gaussian_filter(a_new, fs.get("edge_softness", 0.45)), 0, 1) * vis
+    if body is not None:
+        alpha = alpha * (1.0 - body)
     if ink_mode(matte):
         # print only: the packshot's ink as coverage in the ink's colour, over the scene's own surface (the fill has
         # taken the generated print away), so a patch of packshot background never shows its edge
@@ -441,11 +493,11 @@ def qa_sheets(res, scene_u8, ref_u8, refmask, alpha, F, roi):
     return qa.before_after(before, after), qa.compare_sheet(before, after, ref_u8[ry0:ry1, rx0:rx1]), tiles
 
 
-def audit(res, scene_u8, alpha, old, vis, F, roi, align_rep=None, squeeze=None, cut=None):
+def audit(res, scene_u8, alpha, old, vis, F, roi, align_rep=None, squeeze=None, cut=None, ink=False, shape=False):
     """run.py's audit -> (findings, audit sheet PIL image or None, verdict line)"""
     x0, y0, x1, y1 = roi
     found, sheet = au.run(scene_u8[y0:y1, x0:x1], res[y0:y1, x0:x1], alpha, old, vis, F, (x0, y0), align_rep, squeeze,
-                          cut)
+                          cut, ink=ink, shape=shape)
     lines = [f"audit      {f['level']:4s} {f['check']}: {f['text']}" + (f" at {f['box']}" if f.get("box") else "")
              for f in found if f["level"] != "INFO"]
     worst = "FAIL" if any(f["level"] == "FAIL" for f in found) else "WARN" if any(f["level"] == "WARN" for f in found) else "clean"

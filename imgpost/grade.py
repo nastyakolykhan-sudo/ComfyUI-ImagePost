@@ -244,6 +244,35 @@ def paper_field(img_lin, mask, size=31, sigma=3.0, pre=1.0):
     return np.maximum(np.stack([gaussian_filter(f[..., c], sigma) for c in range(3)], -1), 1e-4)
 
 
+def clean_paper(ref_lin, inside, t=0.06):
+    """After the flatten the packshot's paper reads 1.0; what is left within t of it is the packshot's own paper:
+    grain, banding (a screenshot's compression, sharpened 2 x it prints as stripes) and the falloff it keeps right at
+    its edges. Inside the outline it becomes clean paper (1.0), on a ramp from 1 - t to 1 - t / 2 so print keeps
+    its anti-aliased edges; the scene's paper and grain then show alone. -> ref_lin"""
+    w = np.clip((lum(ref_lin) - (1.0 - t)) / (0.5 * t), 0.0, 1.0) * inside
+    return ref_lin * (1.0 - w)[..., None] + w[..., None]
+
+
+def body_field(img, region, paper, sigma, lo=0.45, hi=0.92, tol=0.15):
+    """The product's own body colour where a label shows it (a tube's grey between two labels, a clear window),
+    from the scene: pixels that are neither the label's paper (above hi of its level) nor print (below lo) and
+    match the body colour found in and around region, spread by a normalized Gaussian of sigma px. The generated
+    image drew that body nearby (the same stripe a few px off), so its colour and the light across it carry over.
+    img: sRGB float; region: bool, where the real product shows its body; paper: the paper's luminance.
+    -> (h x w x 3 field or None, bool mask of the pixels it was read from)"""
+    from scipy.ndimage import binary_dilation, binary_erosion
+    L = lum(img)
+    cand = (L > lo * paper) & (L < hi * paper)
+    seed = cand & binary_dilation(region, iterations=max(1, int(round(sigma))))
+    if seed.sum() < 20:
+        return None, seed
+    c0 = np.median(img[seed], axis=0)
+    M = binary_erosion(cand & (np.abs(img - c0).max(-1) < tol), iterations=2)    # no anti-aliased print or paper
+    den = gaussian_filter(M.astype(float), sigma)
+    B = np.stack([gaussian_filter(img[..., c] * M, sigma) for c in range(3)], -1) / np.maximum(den, 1e-6)[..., None]
+    return np.where((den > 0.02)[..., None], B, c0), M
+
+
 def flatten(ref_lin, inside, mode="field", columns=True):
     """The packshot's own light on its label paper taken out, so the paper reads 1.0 everywhere. "columns" divides
     by a per-column paper level (exact for a cylinder's steep falloff toward its limbs); "field" does that when

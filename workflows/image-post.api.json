@@ -155,6 +155,10 @@
       "occluder_mask": [
         "4",
         1
+      ],
+      "coords": [
+        "6",
+        3
       ]
     },
     "class_type": "ImagePostMatchFinish",

@@ -288,7 +288,44 @@ def _robust_curve(pos, offs, tol=1.0, deg=2, tries=400):
     return c, float(ok.mean()), float(np.sqrt(np.mean(r[ok] ** 2))) if ok.any() else 99.0
 
 
-def label_outline(img, corners, inset=3.0, search=6.0, step=2.0, skip=0.08, tol=1.0, sharp=(), r_max=None):
+def _local_curve(pos, offs, c0, tol, win):
+    """A side's offset per sample: the candidate nearest the robust curve c0 (within tol), then a local linear fit
+    (tricube weights over win px, refitted twice without hits more than 1 px off it). -> (knots, offsets): the
+    positions of the samples where the fit stands on hits and the smoothed offsets there"""
+    have = np.isfinite(offs)
+    r = np.where(have, np.abs(offs - np.polyval(c0, pos)[:, None]), np.inf)
+    y = offs[np.arange(len(pos)), r.argmin(1)]
+    ok = r.min(1) <= tol
+    w_ok = ok.astype(float)
+    out = np.polyval(c0, pos).astype(float)
+    for _ in range(3):
+        for k, p in enumerate(pos):
+            w = np.clip(1.0 - (np.abs(pos - p) / win) ** 3, 0.0, None) ** 3 * w_ok
+            if (w > 0).sum() < 4:
+                continue
+            A = np.c_[np.ones_like(pos), pos - p] * np.sqrt(w)[:, None]
+            out[k] = np.linalg.lstsq(A, np.where(ok, y, 0.0) * np.sqrt(w), rcond=None)[0][0]
+        w_ok = (ok & (np.abs(y - out) <= 1.0)).astype(float)
+    keep = np.convolve(ok.astype(float), np.ones(5), "same") > 0          # where hits stand within 2 samples
+    keep[[0, -1]] = True
+    return pos[keep], out[keep]
+
+
+def label_outline(img, corners, inset=3.0, search=6.0, step=2.0, skip=0.08, tol=1.0, sharp=(), r_max=None, passes=2):
+    """See _label_outline. A second pass starts from the first pass's corners when one moved more than 1.5 px:
+    the walks then start where the edge really is (a rough corner 4 px off put a side's start on the far side of a
+    shadow line under the label)."""
+    r = _label_outline(img, corners, inset, search, step, skip, tol, sharp, r_max)
+    for _ in range(passes - 1):
+        moved = float(np.max(np.linalg.norm(np.asarray(r["sharp"]) - np.asarray(corners, float), axis=1)))
+        if moved <= 1.5:
+            break
+        corners = np.asarray(r["sharp"], float)
+        r = _label_outline(img, corners, inset, search, step, skip, tol, sharp, r_max)
+    return r
+
+
+def _label_outline(img, corners, inset=3.0, search=6.0, step=2.0, skip=0.08, tol=1.0, sharp=(), r_max=None):
     """A generated label's own outline from 4 rough corners in order around it (within ~2 px of the true edges).
 
     Sides: every sample walks out from `inset` px inside to the first colour edge and in from `search` px outside to
@@ -301,7 +338,7 @@ def label_outline(img, corners, inset=3.0, search=6.0, step=2.0, skip=0.08, tol=
        each side's curve, rms [4] px)"""
     C0 = np.asarray(corners, float)
     cen = C0.mean(0)
-    L_img = img.mean(-1) if img.ndim == 3 else img
+    img_s = gaussian_filter(img, (0.7, 0.7, 0) if img.ndim == 3 else 0.7)      # for the double-edge band test
     kw = dict(pick="first", rel=0.05, min_contrast=0.03)
     S = []
     for i in range(4):
@@ -316,18 +353,50 @@ def label_outline(img, corners, inset=3.0, search=6.0, step=2.0, skip=0.08, tol=
         N = np.repeat(n[None], len(P), 0)
         Tin = snap_points(img, P - inset * n[None], N, lo=-1.0, hi=inset + search, **kw)[0]
         Tout = snap_points(img, P + search * n[None], -N, lo=-1.0, hi=search + inset, **kw)[0]
-        offs = np.c_[(Tin - P) @ n, (Tout - P) @ n]
-        fit = _robust_curve(pos, offs, tol)
+        oi, oo = (Tin - P) @ n, (Tout - P) @ n
+        # a double edge: the two walks stop a few px apart (a light rim on the paper's cut edge; a dark line of
+        # shadow under the label). The band between belongs to the label where it looks like the paper inside,
+        # not like what lies beyond: keep the outer hit there, else the inner one
+        edge = "single"
+        dual = np.isfinite(oi) & np.isfinite(oo) & (oo - oi > 1.0) & (oo - oi < 8.0)
+        if dual.any():
+            def col(off):
+                q = P[dual] + off[:, None] * n[None]
+                return np.stack([_sample(img_s, q[:, 0] + dx, q[:, 1] + dy) for dx, dy in
+                                 ((0, 0), (t[0], t[1]), (-t[0], -t[1]))], 0).mean(0).reshape(len(q), -1)
+            paper, beyond = col(oi[dual] - 3.0), col(oo[dual] + 3.0)
+            # the band's least paper-like point decides (a 1 px dark line between two hits 3 px apart)
+            bands = [col(oi[dual] + f * (oo - oi)[dual]) for f in (0.25, 0.5, 0.75)]
+            far = np.argmax(np.stack([np.abs(b_ - paper).max(-1) for b_ in bands]), axis=0)
+            band = np.stack(bands)[far, np.arange(len(far))]
+            outer = np.abs(band - paper).max(-1) < np.abs(band - beyond).max(-1)
+            k = np.nonzero(dual)[0]
+            oi, oo = oi.copy(), oo.copy()
+            oi[k[outer]] = np.nan
+            oo[k[~outer]] = np.nan
+            edge = f"double on {dual.sum()} of {len(pos)} samples: outer kept on {outer.sum()} (the band is paper), inner on {(~outer).sum()}"
+        fit = _robust_curve(pos, np.c_[oi, oo], tol)
         if fit is None:
             raise ValueError(f"side {i + 1} ({a.round(1).tolist()} -> {b.round(1).tolist()}): too few edge hits, "
                              "check the corners")
-        S.append({"a": a, "t": t, "n": n, "L": L, "c": fit[0], "support": fit[1], "rms": fit[2]})
+        # the quadratic picks the edge out of the clutter; the side itself follows the hits on it locally (a
+        # generated edge bends unevenly: steeper toward a bottle's silhouette, a kink an AI left), straight past its ends
+        loc = _local_curve(pos, np.c_[oi, oo], fit[0], 1.5 * tol, max(30.0, 0.12 * L))
+        S.append({"a": a, "t": t, "n": n, "L": L, "c": fit[0], "loc": loc, "support": fit[1], "rms": fit[2], "edge": edge})
+
+    def off(s, p):
+        P_, F_ = s["loc"]
+        if p <= P_[0]:                   # straight past the ends, along the last stretch's slope
+            return F_[0] + (p - P_[0]) * (F_[1] - F_[0]) / max(P_[1] - P_[0], 1e-9)
+        if p >= P_[-1]:
+            return F_[-1] + (p - P_[-1]) * (F_[-1] - F_[-2]) / max(P_[-1] - P_[-2], 1e-9)
+        return float(np.interp(p, P_, F_))
 
     def at(s, p):
-        return s["a"] + p * s["t"] + np.polyval(s["c"], p) * s["n"]
+        return s["a"] + p * s["t"] + off(s, p) * s["n"]
 
     def tangent(s, p):
-        d = s["t"] + np.polyval(np.polyder(s["c"]), p) * s["n"]
+        d = s["t"] + (off(s, p + 1.0) - off(s, p - 1.0)) / 2.0 * s["n"]
         return d / np.linalg.norm(d)
 
     corner_info = []
@@ -389,7 +458,8 @@ def label_outline(img, corners, inset=3.0, search=6.0, step=2.0, skip=0.08, tol=
         poly.append(corner_info[(i + 1) % 4]["arc"])
     return {"polygon": np.vstack(poly), "sides": sides_pts, "corners": [c["arc"] for c in corner_info],
             "sharp": [c["C"] for c in corner_info], "radii": [round(float(c["r"]), 2) for c in corner_info],
-            "support": [round(s["support"], 2) for s in S], "rms": [round(s["rms"], 2) for s in S]}
+            "support": [round(s["support"], 2) for s in S], "rms": [round(s["rms"], 2) for s in S],
+            "edges": [s["edge"] for s in S]}
 
 
 def snap_silhouette(img, poly_ref, H, out=10.0, back=2.0, step=1.0, push=1.5, margin=1.0, corner_reach=12.0):

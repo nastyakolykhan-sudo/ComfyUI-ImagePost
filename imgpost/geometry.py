@@ -441,6 +441,8 @@ def _fit_cylinder(spec, pr, ps, pw, Yo, Xo, lines, reg):
         rep["cylinder"][f"{side}_limb_deg"] = round(float(np.degrees(H.limb_angle(side))), 1)
     if lmin is not None:
         rep["cylinder"]["limb_min"] = lmin
+    # how far from a rigid camera (1.0: the packshot's proportions kept; 1.03: print 3 % taller than the real label)
+    rep["cylinder"]["stretch"] = round(float(np.linalg.norm(H.A[1]) / max(np.linalg.norm(H.A[0]), 1e-9)), 4)
     return H, rep
 
 

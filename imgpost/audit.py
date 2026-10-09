@@ -102,9 +102,11 @@ def squeeze_info(H, refmask, ref_shape, ref_lin):
     return out
 
 
-def run(crop_u8, after_u8, alpha, old, vis, F, offset, align_rep=None, squeeze=None, cut=None):
+def run(crop_u8, after_u8, alpha, old, vis, F, offset, align_rep=None, squeeze=None, cut=None, ink=False, shape=False):
     """-> (findings, audit sheet PIL image or None). squeeze: {side: {"print": deg the print reaches, "limb": deg}}.
-    cut: real print outside the visible shape (shape 'generated'), which the shape cuts off."""
+    cut: real print outside the visible shape (shape 'generated'), which the shape cuts off. ink: an ink matte (the
+    print lies on the product's own surface by design: no 'covered'). shape: the visible outline is the generated
+    one, so an edge the fit misses by a few px only moves a margin (INFO; 'cut' catches print cut off)."""
     found = []
     prod = (alpha > 0.5) & (vis > 0.5)
     ys, xs = np.nonzero(prod)
@@ -127,7 +129,7 @@ def run(crop_u8, after_u8, alpha, old, vis, F, offset, align_rep=None, squeeze=N
     # covered: near the new edge, pixels whose original colour is the background's, not the product's
     near = prod & (d_in <= band) & (pden > 0.02) & (bden > 0.02)
     db, dp = dist(crop_u8, bgm), dist(crop_u8, pm)
-    cov = near & (db < 0.5 * dp) & (dp > 30)
+    cov = near & (db < 0.5 * dp) & (dp > 30) & (not ink)
     # ...unless the generated product has that colour further in nearby (a printed band running out to its edge)
     h = int(band)
     for y, x in zip(*np.nonzero(cov)):
@@ -184,8 +186,9 @@ def run(crop_u8, after_u8, alpha, old, vis, F, offset, align_rep=None, squeeze=N
         for l in align_rep.get("lines", []):
             m = after.get(l["label"], l["max_px"])
             if m > 1.5:
-                found.append({"check": "edges", "level": "WARN", "box": None,
-                              "text": f"{l['label']}: {m:.1f} px off the generated edge after the fit"})
+                found.append({"check": "edges", "level": "INFO" if shape and m <= 4.0 else "WARN", "box": None,
+                              "text": f"{l['label']}: {m:.1f} px off the generated edge after the fit" +
+                                      (" (the shape is the generated outline: a margin moves, bled or cut)" if shape else "")})
 
     return found, sheet(crop_u8, after_u8, found, offset)
 
